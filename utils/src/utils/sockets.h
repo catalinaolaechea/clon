@@ -1,5 +1,5 @@
-#ifndef CONEXION_H_
-#define CONEXION_H_
+#ifndef SOCKETS_H_
+#define SOCKETS_H_
 
 #include<stdio.h>
 #include<stdlib.h>
@@ -9,18 +9,8 @@
 #include<commons/log.h>
 #include<string.h>
 
-typedef struct
-{
-	op_code codigo_operacion;
-	t_buffer* buffer;
-} t_paquete;
-
-
-//cliente
-int iniciar_servidor(void);
+int iniciar_servidor(char* puerto);
 int esperar_cliente(int);
-
-//servidor
 int crear_conexion(char* ip, char* puerto);
 void liberar_conexion(int socket_cliente);
 

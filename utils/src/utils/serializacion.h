@@ -1,5 +1,5 @@
-#ifndef CONEXION_H_
-#define CONEXION_H_
+#ifndef SERIALIZACION_H_
+#define SERIALIZACION_H_
 
 #include<stdio.h>
 #include<stdlib.h>
@@ -15,6 +15,12 @@ typedef struct
 	void* stream;
 } t_buffer;
 
+typedef struct
+{
+	op_code codigo_operacion;
+	t_buffer* buffer;
+} t_paquete;
+
 void* recibir_buffer(int*, int);
 int recibir_operacion(int);
 t_list* recibir_paquete(int);
@@ -25,3 +31,5 @@ t_paquete* crear_paquete(void);
 void agregar_a_paquete(t_paquete* paquete, void* valor, int tamanio);
 void enviar_paquete(t_paquete* paquete, int socket_cliente);
 void eliminar_paquete(t_paquete* paquete);
+
+#endif
