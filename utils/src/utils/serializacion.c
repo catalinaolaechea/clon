@@ -1,132 +1,61 @@
-void* serializar_paquete(t_paquete* paquete, int bytes)
-{
-	void * magic = malloc(bytes);
-	int desplazamiento = 0;
+#include "serializacion.h"
 
-	memcpy(magic + desplazamiento, &(paquete->codigo_operacion), sizeof(int));
-	desplazamiento+= sizeof(int);
-	memcpy(magic + desplazamiento, &(paquete->buffer->size), sizeof(int));
-	desplazamiento+= sizeof(int);
-	memcpy(magic + desplazamiento, paquete->buffer->stream, paquete->buffer->size);
-	desplazamiento+= paquete->buffer->size;
-
-	return magic;
+t_paquete* crear_paquete(uint8_t op_code) {
+    t_paquete* paquete = malloc(sizeof(t_paquete));
+    paquete->op_code = op_code;
+    paquete->buffer = malloc(sizeof(t_buffer));
+    paquete->buffer->size = 0;
+    paquete->buffer->offset = 0;
+    paquete->buffer->stream = NULL;
+    return paquete;
 }
 
-
-void enviar_mensaje(char* mensaje, int socket_cliente)
-{
-	t_paquete* paquete = malloc(sizeof(t_paquete));
-
-	paquete->codigo_operacion = MENSAJE;
-	paquete->buffer = malloc(sizeof(t_buffer));
-	paquete->buffer->size = strlen(mensaje) + 1;
-	paquete->buffer->stream = malloc(paquete->buffer->size);
-	memcpy(paquete->buffer->stream, mensaje, paquete->buffer->size);
-
-	int bytes = paquete->buffer->size + 2*sizeof(int);
-
-	void* a_enviar = serializar_paquete(paquete, bytes);
-
-	send(socket_cliente, a_enviar, bytes, 0);
-
-	free(a_enviar);
-	eliminar_paquete(paquete);
+void eliminar_paquete(t_paquete* paquete) {
+    free(paquete->buffer->stream);
+    free(paquete->buffer);
+    free(paquete);
 }
 
-
-void crear_buffer(t_paquete* paquete)
-{
-	paquete->buffer = malloc(sizeof(t_buffer));
-	paquete->buffer->size = 0;
-	paquete->buffer->stream = NULL;
+void buffer_add(t_buffer* buffer, void* data, uint32_t size) {
+    buffer->stream = realloc(buffer->stream, buffer->size + size);
+    memcpy(buffer->stream + buffer->size, data, size);
+    buffer->size += size;
 }
 
-t_paquete* crear_paquete(void)
-{
-	t_paquete* paquete = malloc(sizeof(t_paquete));
-	paquete->codigo_operacion = PAQUETE;
-	crear_buffer(paquete);
-	return paquete;
+void buffer_add_uint32(t_buffer* buffer, uint32_t valor) {
+    buffer_add(buffer, &valor, sizeof(uint32_t));
 }
 
-void agregar_a_paquete(t_paquete* paquete, void* valor, int tamanio)
-{
-	paquete->buffer->stream = realloc(paquete->buffer->stream, paquete->buffer->size + tamanio + sizeof(int));
-
-	memcpy(paquete->buffer->stream + paquete->buffer->size, &tamanio, sizeof(int));
-	memcpy(paquete->buffer->stream + paquete->buffer->size + sizeof(int), valor, tamanio);
-
-	paquete->buffer->size += tamanio + sizeof(int);
+void buffer_add_uint8(t_buffer* buffer, uint8_t valor) {
+    buffer_add(buffer, &valor, sizeof(uint8_t));
 }
 
-void enviar_paquete(t_paquete* paquete, int socket_cliente)
-{
-	int bytes = paquete->buffer->size + 2*sizeof(int);
-	void* a_enviar = serializar_paquete(paquete, bytes);
-
-	send(socket_cliente, a_enviar, bytes, 0);
-
-	free(a_enviar);
+void buffer_add_string(t_buffer* buffer, char* str) {
+    uint32_t longitud = strlen(str) + 1;   // el '\0' va incluido en la longitud
+    buffer_add_uint32(buffer, longitud);
+    buffer_add(buffer, str, longitud);
 }
 
-void eliminar_paquete(t_paquete* paquete)
-{
-	free(paquete->buffer->stream);
-	free(paquete->buffer);
-	free(paquete);
+void buffer_read(t_buffer* buffer, void* dest, uint32_t size) {
+    memcpy(dest, buffer->stream + buffer->offset, size);
+    buffer->offset += size;
 }
 
-
-int recibir_operacion(int socket_cliente)
-{
-	int cod_op;
-	if(recv(socket_cliente, &cod_op, sizeof(int), MSG_WAITALL) > 0)
-		return cod_op;
-	else
-	{
-		close(socket_cliente);
-		return -1;
-	}
+uint32_t buffer_read_uint32(t_buffer* buffer) {
+    uint32_t valor;
+    buffer_read(buffer, &valor, sizeof(uint32_t));
+    return valor;
 }
 
-void* recibir_buffer(int* size, int socket_cliente)
-{
-	void * buffer;
-
-	recv(socket_cliente, size, sizeof(int), MSG_WAITALL);
-	buffer = malloc(*size);
-	recv(socket_cliente, buffer, *size, MSG_WAITALL);
-
-	return buffer;
+uint8_t buffer_read_uint8(t_buffer* buffer) {
+    uint8_t valor;
+    buffer_read(buffer, &valor, sizeof(uint8_t));
+    return valor;
 }
 
-void recibir_mensaje(int socket_cliente)
-{
-	int size;
-	char* buffer = recibir_buffer(&size, socket_cliente);
-	log_info(logger, "Me llego el mensaje %s", buffer);
-	free(buffer);
-}
-
-t_list* recibir_paquete(int socket_cliente)
-{
-	int size;
-	int desplazamiento = 0;
-	void * buffer;
-	t_list* valores = list_create();
-	int tamanio;
-
-	buffer = recibir_buffer(&size, socket_cliente);
-	while(desplazamiento < size)
-	{
-		memcpy(&tamanio, buffer + desplazamiento, sizeof(int));
-		desplazamiento+=sizeof(int);
-		char* valor = malloc(tamanio);
-		memcpy(valor, buffer+desplazamiento, tamanio);
-		desplazamiento+=tamanio;
-		list_add(valores, valor);
-	}
-	free(buffer);
-	return valores;
+char* buffer_read_string(t_buffer* buffer) {
+    uint32_t longitud = buffer_read_uint32(buffer);
+    char* str = malloc(longitud);
+    buffer_read(buffer, str, longitud);
+    return str;
 }
