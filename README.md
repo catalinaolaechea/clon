@@ -68,18 +68,36 @@ make install
 
 ## Compilación y ejecución
 
-Cada módulo del proyecto se compila de forma independiente a través de un
-archivo `makefile`. Para compilar un módulo, es necesario ejecutar el comando
-`make` desde la carpeta correspondiente.
+Para compilar todo de una, desde la raíz del repo:
 
-El ejecutable resultante de la compilación se guardará en la carpeta `bin` del
-módulo. Ejemplo:
+```bash
+./scripts/build.sh            # debug (por defecto)
+./scripts/build.sh release
+./scripts/build.sh clean
+```
+
+Compila **`utils` primero** —los 4 módulos enlazan contra `utils/lib/libutils.a`— y corta
+apenas uno falle.
+
+También se puede compilar módulo por módulo con el `makefile` de cada uno. El ejecutable
+queda en la carpeta `bin` del módulo (`utils` genera `lib/libutils.a` en vez de un binario):
 
 ```sh
 cd core
 make
 ./bin/core
 ```
+
+### Perfiles
+
+| Comando | Flags | Cuándo |
+|---|---|---|
+| `make` / `make debug` | `-g -Wall -Wextra -DDEBUG` | **Siempre**, para desarrollar y probar |
+| `make release` | `-O3 -Wall -Wextra -DNDEBUG` | Sólo para medir o para el deploy final |
+
+Usar **debug** para todo el desarrollo: con `-O3 -DNDEBUG`, `gdb` y `valgrind` pierden
+utilidad, y varios criterios de aceptación piden `valgrind --leak-check=full` y
+`--tool=helgrind`.
 
 ## Importar desde Visual Studio Code
 

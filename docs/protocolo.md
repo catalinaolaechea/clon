@@ -124,13 +124,21 @@ Servidor → Cliente : HANDSHAKE_OK     payload vacío
 - Quien recibe `HANDSHAKE_ERROR`, o un módulo que no esperaba, **loguea y aborta**. Seguir con un
   socket inservible sólo mueve el error 20 minutos más adelante.
 
-Quién acepta a quién:
+Combinaciones válidas. **El servidor valida el par `(modulo, canal)` completo**, no sólo el
+módulo: el formato permite representar cosas que no existen, como la Placa pidiendo un canal de
+interrupciones, y esas se rechazan con `HANDSHAKE_ERROR`.
 
-| Servidor | Acepta | Rechaza |
+| Servidor | `(modulo, canal)` aceptados | Todo lo demás |
 |---|---|---|
-| Planificador | `MODULO_CORE` (canal dispatch o interrupt) | todo lo demás |
-| Placa | `MODULO_PLANIFICADOR`, `MODULO_CORE` | todo lo demás |
-| Storage | `MODULO_PLANIFICADOR` | todo lo demás |
+| Planificador | `(CORE, DISPATCH)`, `(CORE, INTERRUPT)` | `HANDSHAKE_ERROR` + log |
+| Placa | `(PLANIFICADOR, UNICO)`, `(CORE, UNICO)` | `HANDSHAKE_ERROR` + log |
+| Storage | `(PLANIFICADOR, UNICO)` | `HANDSHAKE_ERROR` + log |
+
+Es la contracara de haber puesto el canal en el payload en vez de en el op_code: se gana un
+espacio de op_codes que no crece, y se paga con esta validación explícita. Va en una sola función
+de `utils` — `handshake_valido(t_modulo, t_canal)` — para que los tres servidores usen la misma.
+Conviene además loguear en `LOG_LEVEL_DEBUG` el módulo y canal ya decodificados de cada conexión
+aceptada: es lo que reemplaza al "se ve en el op_code" que daba la alternativa descartada.
 
 El handshake produce los **logs obligatorios** de conexión. Texto exacto del enunciado (págs. 14,
 21, 26 y 32), sin los `<>`:
