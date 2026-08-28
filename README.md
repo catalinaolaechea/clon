@@ -1,7 +1,58 @@
-# tp-scaffold
+# EntrenadOS — TP Sistemas Operativos 2C2026
 
-Esta es una plantilla de proyecto diseñada para generar un TP de Sistemas
-Operativos de la UTN FRBA.
+Grupo **los cabuleros de operativos** — UTN FRBA.
+
+Sistema distribuido en C que simula un cluster de entrenamiento de modelos de IA:
+cuatro procesos que se comunican por sockets TCP.
+
+| Módulo | Responsabilidad | A cargo de |
+|---|---|---|
+| `planificador` | Cola de Jobs, syscalls y servicios de I/O | Benitez Mingrone, Rodriguez |
+| `core` | Ciclo de instrucción y MMU | Olaechea |
+| `placa` | Memoria de usuario, paginación y Offload | Pacheco |
+| `storage` | Filesystem FAT32_TRAIN y journaling | Torrado Figueroa |
+| `utils` | Biblioteca compartida: sockets, serialización, protocolo | Dueños: los del Planificador |
+
+## Orden de levantado
+
+El orden lo fija el enunciado: cada módulo asume que sus servidores ya están arriba.
+
+```
+1) placa + storage     (servidores, independientes entre sí)
+2) planificador        (cliente de placa y storage; servidor de cores)
+3) core 1..N           (clientes de planificador y placa)
+```
+
+```bash
+./bin/placa         [Archivo Config]
+./bin/storage       [Archivo Config]
+./bin/planificador  [Archivo Config] [Path Job Inicial]
+./bin/core          [Archivo Config] [Identificador]
+```
+
+Los N Cores son N procesos del **mismo** binario, con configs e identificadores
+distintos. En una sola máquina los tres servidores no pueden compartir puerto: la
+convención del grupo es **planificador 8080, placa 8081, storage 8082**.
+
+## Estructura
+
+Además de un proyecto por módulo, el repo tiene:
+
+```
+configs/local/          # un .config por módulo, todo en 127.0.0.1
+configs/distribuido/    # un .config por módulo con las IPs de las VMs
+pseudocodigo/           # los programas que ejecutan los Jobs (PATH_INSTRUCCIONES)
+scripts/                # levantar-local.sh, bajar-local.sh, build.sh
+runtime/                # artefactos de ejecución (ignorado por git)
+```
+
+Los `.config` y los archivos de pseudocódigo **se versionan**: son los que se editan
+durante la corrección. Todo lo que un módulo escribe en tiempo de ejecución —el
+Offload, el volumen y el journal del Storage, los reportes del Logger— va bajo
+`runtime/` y no se versiona.
+
+La documentación técnica (`protocolo.md`, los diseños y la evidencia de cada check)
+va en `docs/`, que se crea junto con el documento de protocolo.
 
 ## Dependencias
 
@@ -17,18 +68,36 @@ make install
 
 ## Compilación y ejecución
 
-Cada módulo del proyecto se compila de forma independiente a través de un
-archivo `makefile`. Para compilar un módulo, es necesario ejecutar el comando
-`make` desde la carpeta correspondiente.
+Para compilar todo de una, desde la raíz del repo:
 
-El ejecutable resultante de la compilación se guardará en la carpeta `bin` del
-módulo. Ejemplo:
+```bash
+./scripts/build.sh            # debug (por defecto)
+./scripts/build.sh release
+./scripts/build.sh clean
+```
+
+Compila **`utils` primero** —los 4 módulos enlazan contra `utils/lib/libutils.a`— y corta
+apenas uno falle.
+
+También se puede compilar módulo por módulo con el `makefile` de cada uno. El ejecutable
+queda en la carpeta `bin` del módulo (`utils` genera `lib/libutils.a` en vez de un binario):
 
 ```sh
 cd core
 make
 ./bin/core
 ```
+
+### Perfiles
+
+| Comando | Flags | Cuándo |
+|---|---|---|
+| `make` / `make debug` | `-g -Wall -Wextra -DDEBUG` | **Siempre**, para desarrollar y probar |
+| `make release` | `-O3 -Wall -Wextra -DNDEBUG` | Sólo para medir o para el deploy final |
+
+Usar **debug** para todo el desarrollo: con `-O3 -DNDEBUG`, `gdb` y `valgrind` pierden
+utilidad, y varios criterios de aceptación piden `valgrind --leak-check=full` y
+`--tool=helgrind`.
 
 ## Importar desde Visual Studio Code
 

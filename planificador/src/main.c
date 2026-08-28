@@ -1,6 +1,3 @@
-#include <utils/hello.h>
-
-int main(int argc, char* argv[]) {
-    saludar("planificador");
+int main(void) {
     return 0;
 }
