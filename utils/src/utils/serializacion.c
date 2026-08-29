@@ -59,8 +59,7 @@ void eliminar_buffer(t_buffer* buffer) {
 }
 
 void eliminar_paquete(t_paquete* paquete) {
-    free(paquete->buffer->stream);
-    free(paquete->buffer);
+    eliminar_buffer(paquete->buffer);
     free(paquete);
 }
 
