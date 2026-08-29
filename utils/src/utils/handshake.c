@@ -60,15 +60,15 @@ int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador
             eliminar_buffer(respuesta);
             return CONEXION_OK;
         case HANDSHAKE_ERROR:
-            t_buffer* respuesta;                   
-            recibir_buffer(fd, &respuesta);        
-            char* motivo = buffer_read_string(respuesta); 
-            eliminar_buffer(respuesta);
+            t_buffer* respuesta_error;                   
+            recibir_buffer(fd, &respuesta_error);        
+            char* motivo = buffer_read_string(respuesta_error); 
+            eliminar_buffer(respuesta_error);
             fprintf(stderr, "Handshake rechazado: %s\n", motivo);
-            return HANDSHAKE_INVALIDO;
+            return CONEXION_ERROR;
         default:
             fprintf(stderr, "Operacion desconocida recibida: %d\n", respuesta_op_code);
-            return OPERACION_DESCONOCIDA;
+            return CONEXION_ERROR;
     }
 
     return resultado;

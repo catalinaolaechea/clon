@@ -5,5 +5,6 @@
 #include "serializacion.h"
 
 int enviar_handshake(int fd, t_modulo yo, t_canal canal, char* identificador);
+int recibir_handshake(int fd, t_modulo yo, t_modulo* modulo, t_canal* canal, char** identificador);
 
 #endif
