@@ -122,7 +122,7 @@ char* buffer_read_string(t_buffer* buffer) {
 static int enviar_todo(int fd, void* datos, uint32_t size) {
     uint32_t movidos = 0;
     while (movidos < size) {
-        ssize_t enviados = send(fd, datos + movidos, size - movidos, 0);
+        ssize_t enviados = send(fd, datos + movidos, size - movidos, MSG_NOSIGNAL);
 
         if (enviados == -1) {
             if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
