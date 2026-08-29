@@ -27,11 +27,50 @@ int enviar_paquete(int fd, t_paquete* paquete) {
     offset += sizeof(uint8_t);
     memcpy(datos + offset, &paquete->buffer->size, sizeof(uint32_t));
     offset += sizeof(uint32_t);
-    memcpy(datos + offset, paquete->buffer->stream, paquete->buffer->size);
+    if (paquete->buffer->size > 0){
+        memcpy(datos + offset, paquete->buffer->stream, paquete->buffer->size);
+    }
 
     int resultado = enviar_todo(fd, datos, total);
 
     free(datos);
+    return resultado;
+}
+
+int recibir_buffer(int fd, t_buffer** buffer) {
+    *buffer = NULL; // inicializar el puntero a NULL en caso de error
+    uint32_t size; // tamaño del buffer a recibir
+    
+    int resultado = recibir_todo(fd, &size, sizeof(uint32_t));
+    if (resultado != CONEXION_OK) return resultado;
+    if (size > TAM_MAXIMO_PAYLOAD) {
+        fprintf(stderr, "recibir_buffer: tamaño de buffer demasiado grande: %u bytes\n", size);
+        return CONEXION_ERROR;
+    }
+
+    *buffer = malloc(sizeof(t_buffer));
+    (*buffer)->size = size;
+    (*buffer)->offset = 0;
+    (*buffer)->stream = NULL;
+
+    // si el tamaño es 0, no hay datos que recibir, así que podemos devolver CONEXION_OK directamente
+    if (size > 0) {
+        (*buffer)->stream = malloc(size);
+
+        resultado = recibir_todo(fd, (*buffer)->stream, size);
+        if (resultado != CONEXION_OK) {
+            free((*buffer)->stream);
+            free(*buffer);
+            *buffer = NULL;
+            return resultado;
+        }
+    }
+
+    return CONEXION_OK;
+}
+
+int recibir_operacion(int fd, uint8_t* op_code) {
+    int resultado = recibir_todo(fd, op_code, sizeof(uint8_t));
     return resultado;
 }
 
@@ -86,8 +125,8 @@ static int enviar_todo(int fd, void* datos, uint32_t size) {
         ssize_t enviados = send(fd, datos + movidos, size - movidos, 0);
 
         if (enviados == -1) {
+            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
             fprintf(stderr, "enviar_todo: send: %s\n", strerror(errno));
-                if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
             return CONEXION_ERROR;
         }
 
@@ -103,8 +142,8 @@ static int recibir_todo(int fd, void* datos, uint32_t size) {
         ssize_t recibidos = recv(fd, datos + movidos, size - movidos, 0);
 
         if (recibidos == -1) {
+            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
             fprintf(stderr, "recibir_todo: recv: %s\n", strerror(errno));
-                if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
             return CONEXION_ERROR;
         }
 
