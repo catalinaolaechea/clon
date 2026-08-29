@@ -1,5 +1,7 @@
 #include "handshake.h"
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 
 // Define los modulos que pueden conectarse entre si y los canales que pueden usar para comunicarse
@@ -54,22 +56,84 @@ int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador
     }
 
     switch (respuesta_op_code) {
-        case HANDSHAKE_OK:
-            t_buffer* respuesta;                   
-            recibir_buffer(fd, &respuesta); 
+        case HANDSHAKE_OK: {
+            t_buffer* respuesta;
+            resultado = recibir_buffer(fd, &respuesta);
+            if (resultado != CONEXION_OK) return resultado;
+
             eliminar_buffer(respuesta);
             return CONEXION_OK;
-        case HANDSHAKE_ERROR:
-            t_buffer* respuesta_error;                   
-            recibir_buffer(fd, &respuesta_error);        
-            char* motivo = buffer_read_string(respuesta_error); 
-            eliminar_buffer(respuesta_error);
-            fprintf(stderr, "Handshake rechazado: %s\n", motivo);
+        }
+        case HANDSHAKE_ERROR: {
+            t_buffer* respuesta;
+            resultado = recibir_buffer(fd, &respuesta);
+            if (resultado != CONEXION_OK) return resultado;
+
+            char* motivo = buffer_read_string(respuesta);
+            eliminar_buffer(respuesta);
+
+            fprintf(stderr, "enviar_handshake: rechazado por el servidor: %s\n", motivo);
+            free(motivo);
             return CONEXION_ERROR;
+        }
         default:
-            fprintf(stderr, "Operacion desconocida recibida: %d\n", respuesta_op_code);
+            fprintf(stderr, "enviar_handshake: op_code inesperado: %u\n", respuesta_op_code);
             return CONEXION_ERROR;
     }
 
     return resultado;
 }
+
+
+int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, char** identificador) {
+    *identificador = NULL;
+
+    uint8_t op_code;
+    int resultado = recibir_operacion(fd, &op_code);
+    if (resultado != CONEXION_OK) {
+        fprintf(stderr, "recibir_handshake: no llego el handshake\n");
+        return resultado;
+    }
+
+    if (op_code != HANDSHAKE) {
+        fprintf(stderr, "recibir_handshake: el primer mensaje no es un handshake (op_code %d)\n", op_code);
+        return CONEXION_ERROR;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(fd, &buffer);
+    if (resultado != CONEXION_OK) {
+        fprintf(stderr, "recibir_handshake: no llego el payload del handshake\n");
+        return resultado;
+    }
+
+    *cliente       = buffer_read_uint8(buffer);
+    *canal         = buffer_read_uint8(buffer);
+    *identificador = buffer_read_string(buffer);
+    eliminar_buffer(buffer);
+
+    if (!handshake_valido(servidor, *cliente, *canal)) {
+        fprintf(stderr, "recibir_handshake: rechazado (modulo %d, canal %d)\n", *cliente, *canal);
+
+        t_paquete* rechazo = crear_paquete(HANDSHAKE_ERROR);
+        buffer_add_string(rechazo->buffer, "modulo o canal no esperado por este servidor");
+        enviar_paquete(fd, rechazo);
+        eliminar_paquete(rechazo);
+
+        free(*identificador);
+        *identificador = NULL;
+        return CONEXION_ERROR;
+    }
+
+    t_paquete* ok = crear_paquete(HANDSHAKE_OK);
+    resultado = enviar_paquete(fd, ok);
+    eliminar_paquete(ok);
+
+    if (resultado != CONEXION_OK) {
+        free(*identificador);
+        *identificador = NULL;
+        return resultado;
+    }
+
+    return CONEXION_OK;
+  }
