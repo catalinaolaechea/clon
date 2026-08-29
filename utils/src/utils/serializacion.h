@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #define CONEXION_OK 0
 #define CONEXION_ERROR -1
@@ -22,6 +23,7 @@ typedef struct {
 
 t_paquete* crear_paquete(uint8_t op_code);
 void eliminar_paquete(t_paquete* paquete);
+int enviar_paquete(int fd, t_paquete* paquete);
 
 void buffer_add_uint32(t_buffer* buffer, uint32_t valor);
 void buffer_add_uint8 (t_buffer* buffer, uint8_t valor);
