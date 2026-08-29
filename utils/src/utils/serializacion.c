@@ -37,6 +37,11 @@ int enviar_paquete(int fd, t_paquete* paquete) {
     return resultado;
 }
 
+void eliminar_buffer(t_buffer* buffer) {
+    free(buffer->stream);
+    free(buffer);
+}
+
 int recibir_buffer(int fd, t_buffer** buffer) {
     *buffer = NULL; // inicializar el puntero a NULL en caso de error
     uint32_t size; // tamaño del buffer a recibir

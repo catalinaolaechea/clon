@@ -27,6 +27,7 @@ t_paquete* crear_paquete(uint8_t op_code);
 void eliminar_paquete(t_paquete* paquete);
 int enviar_paquete(int fd, t_paquete* paquete);
 int recibir_operacion(int fd, uint8_t* op_code);
+void eliminar_buffer(t_buffer* buffer);
 int recibir_buffer(int fd, t_buffer** buffer);
 
 void buffer_add_uint32(t_buffer* buffer, uint32_t valor);
