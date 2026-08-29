@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define CONEXION_OK 0
+#define CONEXION_ERROR -1
+#define CONEXION_DESCONECTADO -2
+
 typedef struct {
     uint32_t size;      // bytes escritos
     uint32_t offset;    // cursor de lectura

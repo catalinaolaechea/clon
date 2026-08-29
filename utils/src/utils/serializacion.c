@@ -1,4 +1,6 @@
 #include "serializacion.h"
+#include "sys/socket.h"
+#include "errno.h"
 
 t_paquete* crear_paquete(uint8_t op_code) {
     t_paquete* paquete = malloc(sizeof(t_paquete));
@@ -58,4 +60,38 @@ char* buffer_read_string(t_buffer* buffer) {
     char* str = malloc(longitud);
     buffer_read(buffer, str, longitud);
     return str;
+}
+
+// No van en el header porque son funciones privadas de este módulo
+static int enviar_todo(int fd, void* datos, uint32_t size) {
+    int movidos = 0;
+    while (movidos < size) {
+        int enviados = send(fd, datos + movidos, size - movidos, 0);
+
+        if (enviados == -1) {
+            fprintf(stderr, "enviar_todo: send: %s\n", strerror(errno));
+            return CONEXION_ERROR;
+        }
+
+        movidos += enviados;
+    }
+}
+
+static int recibir_todo(int fd, void* datos, uint32_t size) {
+    int movidos = 0;
+    while (movidos < size) {
+        int recibidos = recv(fd, datos + movidos, size - movidos, 0);
+
+        if (recibidos == -1) {
+            fprintf(stderr, "recibir_todo: recv: %s\n", strerror(errno));
+            return CONEXION_ERROR;
+        }
+
+        if (recibidos == 0) {
+            fprintf(stderr, "recibir_todo: recv: conexión cerrada por el otro extremo\n");
+            return CONEXION_DESCONECTADO;
+        }
+        
+        movidos += recibidos;
+    }
 }
