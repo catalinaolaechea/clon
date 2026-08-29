@@ -19,7 +19,20 @@ void eliminar_paquete(t_paquete* paquete) {
 }
 
 int enviar_paquete(int fd, t_paquete* paquete) {
-    
+    uint32_t total = sizeof(uint8_t) + sizeof(uint32_t) + paquete->buffer->size;
+    void* datos = malloc(total);
+
+    uint32_t offset = 0;
+    memcpy(datos + offset, &paquete->op_code, sizeof(uint8_t));
+    offset += sizeof(uint8_t);
+    memcpy(datos + offset, &paquete->buffer->size, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+    memcpy(datos + offset, paquete->buffer->stream, paquete->buffer->size);
+
+    int resultado = enviar_todo(fd, datos, total);
+
+    free(datos);
+    return resultado;
 }
 
 void buffer_add(t_buffer* buffer, void* data, uint32_t size) {
