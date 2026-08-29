@@ -2,6 +2,47 @@
 #include <sys/socket.h> 
 #include <errno.h>
 
+
+
+// No van en el header porque son funciones privadas de este módulo
+static int enviar_todo(int fd, void* datos, uint32_t size) {
+    uint32_t movidos = 0;
+    while (movidos < size) {
+        ssize_t enviados = send(fd, datos + movidos, size - movidos, MSG_NOSIGNAL);
+
+        if (enviados == -1) {
+            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
+            fprintf(stderr, "enviar_todo: send: %s\n", strerror(errno));
+            return CONEXION_ERROR;
+        }
+
+        movidos += enviados;
+    }
+
+    return CONEXION_OK;
+}
+
+static int recibir_todo(int fd, void* datos, uint32_t size) {
+    uint32_t movidos = 0;
+    while (movidos < size) {
+        ssize_t recibidos = recv(fd, datos + movidos, size - movidos, 0);
+
+        if (recibidos == -1) {
+            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
+            fprintf(stderr, "recibir_todo: recv: %s\n", strerror(errno));
+            return CONEXION_ERROR;
+        }
+
+        if (recibidos == 0) {
+            return CONEXION_DESCONECTADO;
+        }
+        
+        movidos += recibidos;
+    }
+
+    return CONEXION_OK;
+}
+
 t_paquete* crear_paquete(uint8_t op_code) {
     t_paquete* paquete = malloc(sizeof(t_paquete));
     paquete->op_code = op_code;
@@ -10,6 +51,11 @@ t_paquete* crear_paquete(uint8_t op_code) {
     paquete->buffer->offset = 0;
     paquete->buffer->stream = NULL;
     return paquete;
+}
+
+void eliminar_buffer(t_buffer* buffer) {
+    free(buffer->stream);
+    free(buffer);
 }
 
 void eliminar_paquete(t_paquete* paquete) {
@@ -35,11 +81,6 @@ int enviar_paquete(int fd, t_paquete* paquete) {
 
     free(datos);
     return resultado;
-}
-
-void eliminar_buffer(t_buffer* buffer) {
-    free(buffer->stream);
-    free(buffer);
 }
 
 int recibir_buffer(int fd, t_buffer** buffer) {
@@ -121,43 +162,4 @@ char* buffer_read_string(t_buffer* buffer) {
     char* str = malloc(longitud);
     buffer_read(buffer, str, longitud);
     return str;
-}
-
-// No van en el header porque son funciones privadas de este módulo
-static int enviar_todo(int fd, void* datos, uint32_t size) {
-    uint32_t movidos = 0;
-    while (movidos < size) {
-        ssize_t enviados = send(fd, datos + movidos, size - movidos, MSG_NOSIGNAL);
-
-        if (enviados == -1) {
-            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
-            fprintf(stderr, "enviar_todo: send: %s\n", strerror(errno));
-            return CONEXION_ERROR;
-        }
-
-        movidos += enviados;
-    }
-
-    return CONEXION_OK;
-}
-
-static int recibir_todo(int fd, void* datos, uint32_t size) {
-    uint32_t movidos = 0;
-    while (movidos < size) {
-        ssize_t recibidos = recv(fd, datos + movidos, size - movidos, 0);
-
-        if (recibidos == -1) {
-            if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
-            fprintf(stderr, "recibir_todo: recv: %s\n", strerror(errno));
-            return CONEXION_ERROR;
-        }
-
-        if (recibidos == 0) {
-            return CONEXION_DESCONECTADO;
-        }
-        
-        movidos += recibidos;
-    }
-
-    return CONEXION_OK;
 }
