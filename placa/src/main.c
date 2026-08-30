@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     int client_escucha = esperar_cliente(server_placa);
 
     while(1){
-        int cod_op = recibir_operacion(client_escucha);
+        int cod_op = recibir_operacion1(client_escucha);
 
         switch (cod_op)
         {

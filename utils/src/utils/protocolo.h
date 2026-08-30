@@ -13,6 +13,10 @@
 #define CONTEXTO_CANT_REGISTROS 14
 #define CONTEXTO_SIZE (CONTEXTO_CANT_REGISTROS * sizeof(uint32_t))
 
+// Log de conexion: "## Módulo: <nombre_modulo>"
+#define LOG_CONEXION_RECIBIDA "## Módulo: %s"
+#define LOG_CONEXION_ESTABLECIDA "## Conectado a %s exitosamente"
+
 // El 0 es invalido a proposito: una variable sin inicializar no se hace pasar
 // por un modulo valido.
 typedef enum {
