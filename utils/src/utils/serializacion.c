@@ -114,12 +114,12 @@ int recibir_buffer(int fd, t_buffer** buffer) {
     return CONEXION_OK;
 }
 
-int recibir_operacion1(int fd, uint8_t* op_code) {
+int recibir_operacion(int fd, uint8_t* op_code) {
     int resultado = recibir_todo(fd, op_code, sizeof(uint8_t));
     return resultado;
 }
 
-int recibir_operacion(int socket_cliente){
+int recibir_operacion1(int socket_cliente){
     int cod_op;
     if(recv(socket_cliente, &cod_op, sizeof(int), MSG_WAITALL)>0){
         return cod_op;
