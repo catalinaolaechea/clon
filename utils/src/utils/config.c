@@ -1,4 +1,4 @@
-#include "so_config.h"
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -33,5 +33,5 @@ int so_config_get_int(t_config* config, char* nombre_modulo, char*clave){
 
 double so_config_get_double(t_config* config, char*nombre_modulo, char* clave){
     abortar_si_falta(config,nombre_modulo,clave);
-    return strtod(config_get_double_value(config,clave),NULL);
+    return config_get_double_value(config,clave);
 }
