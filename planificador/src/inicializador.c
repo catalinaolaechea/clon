@@ -30,7 +30,7 @@ void inicializar_config(){
     config_planificador.puerto_placa = so_config_get_string(planificador_config, "PLANIFICADOR", "PUERTO_PLACA");
     config_planificador.ip_storage = so_config_get_string(planificador_config, "PLANIFICADOR", "IP_STORAGE");
     config_planificador.puerto_storage = so_config_get_string(planificador_config, "PLANIFICADOR", "PUERTO_STORAGE");
-    config_planificador.log_level = so_config_get_string(planificador_config, "PLANIFICADOR", "LOG_LEVEL");
+    config_planificador.log_level = log_level_from_string(so_config_get_string(planificador_config, "PLANIFICADOR", "LOG_LEVEL"));
     config_planificador.algoritmo_planificacion = algoritmo_desde_string(so_config_get_string(planificador_config, "PLANIFICADOR", "ALGORITMO_PLANIFICACION"));
     config_planificador.rr_quantum = so_config_get_int(planificador_config, "PLANIFICADOR", "RR_QUANTUM");
     config_planificador.estimacion_inicial = so_config_get_int(planificador_config, "PLANIFICADOR", "ESTIMACION_INICIAL");
@@ -42,5 +42,5 @@ void inicializar_config(){
 }
 
 void inicializar_log(){
-    planificador_logger = iniciar_logger("planificador.log","PLANIFICADOR", log_level_from_string(config_planificador.log_level));
+    planificador_logger = iniciar_logger("planificador.log","PLANIFICADOR", config_planificador.log_level);
 }
