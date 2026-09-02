@@ -15,7 +15,7 @@ t_config* iniciar_config(char* path_config){
 
 static void abortar_si_falta(t_config* config, char* nombre_modulo, char* clave){
     if (!config_has_property(config,clave)){
-        fprintf(stderr, "ERROR - Falta clave obligatoria en el config %s\n",nombre_modulo,clave);
+        fprintf(stderr, "ERROR - Falta clave obligatoria en el config de %s clave: %s \n",nombre_modulo,clave);
         config_destroy(config);
         exit(EXIT_FAILURE);
     }
