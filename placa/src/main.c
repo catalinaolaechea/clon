@@ -15,11 +15,18 @@ int main(int argc, char* argv[]) {
     int server_placa = iniciar_servidor(PUERTO_ESCUCHA);
 
     log_info(placa_logger,"Servidor listo para recibir a los clientes");    
+    /*
+    while(1){
+        int cliente = esperar_cliente(server_placa);
+        
+        int cod_op;
 
-    int client_escucha = esperar_cliente(server_placa);
+
+    } */
+
 
     while(1){
-        int cod_op = recibir_operacion1(client_escucha);
+        int cod_op = 1; //recibir_operacion1(client_escucha);
 
         switch (cod_op)
         {
@@ -38,6 +45,7 @@ int main(int argc, char* argv[]) {
 
         }
     }
+
 
     return EXIT_FAILURE;
 }
