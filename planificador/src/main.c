@@ -1,4 +1,5 @@
 #include "inicializador.h"
+#include "servidores_core.h"
 
 int main(int argc, char* argv[]) {
     
@@ -13,7 +14,8 @@ int main(int argc, char* argv[]) {
     inicializar_config();
     inicializar_log();
 
-    // Siguiente ISSUE
+    pthread_t hilo_servidor = iniciar_servidor_cores();
+    pthread_join(hilo_servidor, NULL);
 
     log_destroy(planificador_logger);
     config_destroy(planificador_config);

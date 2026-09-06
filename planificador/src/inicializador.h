@@ -3,6 +3,7 @@
 
 #include <utils/protocolo.h>
 #include <utils/serializacion.h>
+#include <utils/handshake.h>
 #include <utils/config.h>
 #include <utils/log.h>
 #include <utils/sockets.h>
