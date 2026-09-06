@@ -5,6 +5,8 @@
 #include <utils/serializacion.h>
 #include <utils/sockets.h>
 #include <utils/utils.h>
+#include <utils/config.h>
+#include <utils/log.h>
 
 extern t_config* placa_config;
 extern t_log* placa_logger;
@@ -12,7 +14,7 @@ extern char* archivo_config;
 
 //archivo de configuracion
 extern char* PUERTO_ESCUCHA;
-extern char* LOG_LEVEL;
+extern t_log_level LOG_LEVEL;
 extern int TAM_MEMORIA;
 extern int TAM_PAGINA;
 extern int RETARDO_MEMORIA;
@@ -21,6 +23,7 @@ extern char* PATH_INSTRUCCIONES;
 extern char* PATH_OFFLOAD;
 extern int TAM_OFFLOAD;
 extern int RETARDO_OFFLOAD;
+
 
 void inicializar_log();
 void inicializar_config();

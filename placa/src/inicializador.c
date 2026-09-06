@@ -7,7 +7,7 @@ char* archivo_config;
 
 //variables de archiivo 
 char* PUERTO_ESCUCHA;
-char* LOG_LEVEL;
+t_log_level LOG_LEVEL;
 int TAM_MEMORIA;
 int TAM_PAGINA;
 int RETARDO_MEMORIA;
@@ -17,8 +17,11 @@ char* PATH_OFFLOAD;
 int TAM_OFFLOAD;
 int RETARDO_OFFLOAD;
 
+
 void inicializar_log(){
-    placa_logger = log_create("placa.log","LOGGER_PLACA",true,LOG_LEVEL_TRACE);
+    //placa_logger = log_create("placa.log","LOGGER_PLACA",true,LOG_LEVEL_TRACE);
+    placa_logger = iniciar_logger("placa.log","LOGGER_PLACA",LOG_LEVEL);
+
 }
 
 void inicializar_config(){
@@ -26,7 +29,7 @@ void inicializar_config(){
     placa_config = config_create(archivo_config);
 
     PUERTO_ESCUCHA = config_get_string_value(placa_config,"PUERTO_ESCUCHA");
-    LOG_LEVEL = config_get_string_value(placa_config,"LOG_LEVEL");
+    LOG_LEVEL = log_level_from_string(config_get_string_value(placa_config,"LOG_LEVEL"));
     TAM_MEMORIA = config_get_int_value(placa_config,"TAM_MEMORIA");
     TAM_PAGINA = config_get_int_value(placa_config,"TAM_PAGINA");
     RETARDO_MEMORIA = config_get_int_value(placa_config,"RETARDO_MEMORIA");
