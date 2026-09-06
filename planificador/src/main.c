@@ -1,4 +1,5 @@
 #include "inicializador.h"
+#include "servidores_core.h"
 
 int main(int argc, char* argv[]) {
     
