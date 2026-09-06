@@ -1,7 +1,4 @@
 #include "serializacion.h"
-#include <sys/socket.h> 
-#include <errno.h>
-#include <unistd.h>
 
 
 // No van en el header porque son funciones privadas de este módulo
@@ -25,7 +22,7 @@ static int enviar_todo(int fd, void* datos, uint32_t size) {
 static int recibir_todo(int fd, void* datos, uint32_t size) {
     uint32_t movidos = 0;
     while (movidos < size) {
-        ssize_t recibidos = recv(fd, datos + movidos, size - movidos, 0);
+        ssize_t recibidos = recv(fd, datos + movidos, size - movidos, MSG_WAITALL);
 
         if (recibidos == -1) {
             if (errno == EINTR) continue;  // si la llamada fue interrumpida, reintentar
@@ -43,26 +40,12 @@ static int recibir_todo(int fd, void* datos, uint32_t size) {
     return CONEXION_OK;
 }
 
-t_paquete* crear_paquete(uint8_t op_code) {
-    t_paquete* paquete = malloc(sizeof(t_paquete));
-    paquete->op_code = op_code;
-    paquete->buffer = malloc(sizeof(t_buffer));
-    paquete->buffer->size = 0;
-    paquete->buffer->offset = 0;
-    paquete->buffer->stream = NULL;
-    return paquete;
-}
-
 void eliminar_buffer(t_buffer* buffer) {
     free(buffer->stream);
     free(buffer);
 }
 
-void eliminar_paquete(t_paquete* paquete) {
-    eliminar_buffer(paquete->buffer);
-    free(paquete);
-}
-
+/*
 int enviar_paquete(int fd, t_paquete* paquete) {
     uint32_t total = sizeof(uint8_t) + sizeof(uint32_t) + paquete->buffer->size;
     void* datos = malloc(total);
@@ -81,6 +64,49 @@ int enviar_paquete(int fd, t_paquete* paquete) {
     free(datos);
     return resultado;
 }
+*/
+
+//Funciones del tp0 adaptadas 
+
+//modificado
+int enviar_paquete(int socket_cliente, t_paquete* paquete){
+
+    if (paquete == NULL || paquete->buffer == NULL) {
+        fprintf(stderr, "enviar_paquete: paquete inválido\n");
+        return -1;
+    }
+
+    uint32_t bytes = sizeof(uint8_t) + sizeof(uint32_t) + paquete->buffer->size;
+
+    void* a_enviar = serializar_paquete(paquete, bytes);
+
+    int resultado = enviar_todo(socket_cliente, a_enviar, bytes);
+
+    //send(socket_cliente, a_enviar,bytes,0);
+
+    free(a_enviar);
+
+    return resultado;
+}
+
+//modificado
+void* serializar_paquete(t_paquete* paquete, int bytes)
+{
+	void * magic = malloc(bytes);
+	int desplazamiento = 0;
+
+	memcpy(magic + desplazamiento, &(paquete->op_code), sizeof(uint8_t));
+	desplazamiento+= sizeof(uint8_t);
+	memcpy(magic + desplazamiento, &(paquete->buffer->size), sizeof(uint32_t));
+	desplazamiento+= sizeof(uint32_t);
+    if (paquete->buffer->size > 0){
+        memcpy(magic + desplazamiento, paquete->buffer->stream, paquete->buffer->size);
+	    desplazamiento+= paquete->buffer->size;
+    }
+
+	return magic;
+}
+
 
 int recibir_buffer(int fd, t_buffer** buffer) {
     *buffer = NULL; // inicializar el puntero a NULL en caso de error
@@ -88,6 +114,7 @@ int recibir_buffer(int fd, t_buffer** buffer) {
     
     int resultado = recibir_todo(fd, &size, sizeof(uint32_t));
     if (resultado != CONEXION_OK) return resultado;
+    
     if (size > TAM_MAXIMO_PAYLOAD) {
         fprintf(stderr, "recibir_buffer: tamaño de buffer demasiado grande: %u bytes\n", size);
         return CONEXION_ERROR;
@@ -114,21 +141,52 @@ int recibir_buffer(int fd, t_buffer** buffer) {
     return CONEXION_OK;
 }
 
+//Añadido
+t_list* recibir_paquete(int socket_cliente)
+{
+    t_buffer* buffer;
+    int resultado = recibir_buffer(socket_cliente, &buffer);
+    if (resultado != CONEXION_OK) return NULL;
+
+	t_list* valores = list_create();
+	uint32_t tamanio;
+
+	while(buffer->offset < buffer->size)
+	{
+		memcpy(&tamanio, buffer->stream + buffer->offset, sizeof(uint32_t));
+		buffer->offset +=sizeof(uint32_t);
+
+		char* valor = malloc(tamanio);
+
+		memcpy(valor, buffer->stream+buffer->offset , tamanio);
+		buffer->offset +=tamanio;
+
+		list_add(valores, valor);
+	}
+
+	free(buffer);
+	return valores;
+}
+
 int recibir_operacion(int fd, uint8_t* op_code) {
     int resultado = recibir_todo(fd, op_code, sizeof(uint8_t));
     return resultado;
 }
 
-int recibir_operacion1(int socket_cliente){
-    int cod_op;
-    if(recv(socket_cliente, &cod_op, sizeof(int), MSG_WAITALL)>0){
-        return cod_op;
-    }else {
-        close(socket_cliente);
-        return -1;
-    }
+t_paquete* crear_paquete(uint8_t op_code) {
+    t_paquete* paquete = malloc(sizeof(t_paquete));
+    paquete->op_code = op_code;
+    paquete->buffer = malloc(sizeof(t_buffer));
+    paquete->buffer->size = 0;
+    paquete->buffer->offset = 0;
+    paquete->buffer->stream = NULL;
+    return paquete;
 }
 
+void eliminar_paquete(t_paquete* paquete) {
+    eliminar_buffer(paquete->buffer);
+    free(paquete);
+}
 
 
 void buffer_add(t_buffer* buffer, void* data, uint32_t size) {
@@ -174,3 +232,7 @@ char* buffer_read_string(t_buffer* buffer) {
     buffer_read(buffer, str, longitud);
     return str;
 }
+
+
+
+
