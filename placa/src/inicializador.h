@@ -26,6 +26,12 @@ extern char* PATH_OFFLOAD;
 extern int TAM_OFFLOAD;
 extern int RETARDO_OFFLOAD;
 
+//variables globables
+extern t_list* lista_core;
+
+//semaforos
+extern pthread_mutex_t mutex_lista_core;
+extern pthread_mutex_t  mutex_procesos;
 
 typedef struct {
     int socket_core;
