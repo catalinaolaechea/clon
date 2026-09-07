@@ -55,6 +55,7 @@ void* atender_cliente(void* socket){
 
             pthread_t hilo_planificador;
             pthread_create(&hilo_planificador,NULL,atender_planificador,socket_planificador_ptr);
+            pthread_detach(hilo_planificador);
 
             break;            
         }
