@@ -7,6 +7,8 @@
 #include <utils/utils.h>
 #include <utils/config.h>
 #include <utils/log.h>
+#include <pthread.h>
+#include <utils/handshake.h>
 
 extern t_config* placa_config;
 extern t_log* placa_logger;
@@ -25,8 +27,18 @@ extern int TAM_OFFLOAD;
 extern int RETARDO_OFFLOAD;
 
 
+typedef struct {
+    int socket_core;
+    int id_core;
+}t_core_placa;
+
 void inicializar_log();
 void inicializar_config();
+
+//funciones de servidor
+void* atender_cliente(void* socket);
+void* atender_core(void* core);
+void* atender_planificador(void* panificador);
 
 
 #endif

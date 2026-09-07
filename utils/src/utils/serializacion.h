@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <commons/collections/list.h>
 
 #define TAM_MAXIMO_PAYLOAD (16 * 1024 * 1024) 
 // 16 MB numero razonable para un payload maximo, se puede cambiar si se desea
@@ -30,6 +31,7 @@ int enviar_paquete(int fd, t_paquete* paquete);
 int recibir_operacion(int fd, uint8_t* op_code);
 void eliminar_buffer(t_buffer* buffer);
 int recibir_buffer(int fd, t_buffer** buffer);
+t_list* recibir_paquete(int socket_cliente);
 
 void buffer_add_uint32(t_buffer* buffer, uint32_t valor);
 void buffer_add_uint8 (t_buffer* buffer, uint8_t valor);
