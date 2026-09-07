@@ -128,6 +128,34 @@ t_paquete* crear_paquete(uint8_t op_code) {
     return paquete;
 }
 
+//Añadido
+t_list* recibir_paquete(int socket_cliente)
+{
+    t_buffer* buffer;
+    int resultado = recibir_buffer(socket_cliente, &buffer);
+    if (resultado != CONEXION_OK) return NULL;
+
+	t_list* valores = list_create();
+	uint32_t tamanio;
+
+	while(buffer->offset < buffer->size)
+	{
+		memcpy(&tamanio, buffer->stream + buffer->offset, sizeof(uint32_t));
+		buffer->offset +=sizeof(uint32_t);
+
+		char* valor = malloc(tamanio);
+
+		memcpy(valor, buffer->stream+buffer->offset , tamanio);
+		buffer->offset +=tamanio;
+
+		list_add(valores, valor);
+	}
+
+	free(buffer);
+	return valores;
+}
+
+
 void eliminar_paquete(t_paquete* paquete) {
     eliminar_buffer(paquete->buffer);
     free(paquete);

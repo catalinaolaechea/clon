@@ -17,7 +17,6 @@ char* PATH_OFFLOAD;
 int TAM_OFFLOAD;
 int RETARDO_OFFLOAD;
 
-
 void inicializar_log(){
     //placa_logger = log_create("placa.log","LOGGER_PLACA",true,LOG_LEVEL_TRACE);
     placa_logger = iniciar_logger("placa.log","LOGGER_PLACA",LOG_LEVEL);
