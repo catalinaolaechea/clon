@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
 
     int socket_placa = crear_conexion(config_planificador.ip_placa,config_planificador.puerto_placa);
 
-    int conexion = enviar_handshake(socket_placa,MODULO_PLANIFICADOR,CANAL_UNICO,"Planificador"); 
+    int conexion = enviar_handshake(socket_placa,MODULO_PLANIFICADOR,CANAL_UNICO); 
 
     pthread_t hilo_servidor = iniciar_servidor_cores();
     pthread_join(hilo_servidor, NULL);
