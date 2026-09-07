@@ -26,14 +26,7 @@ static bool handshake_valido(t_modulo servidor, t_modulo cliente, t_canal canal)
     return false;
 }
 
-int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador) {
-    // Creo el paquete de handshake
-    t_paquete* paquete = crear_paquete(HANDSHAKE);
-
-    // Agrego los datos del handshake al paquete
-    buffer_add_uint8(paquete->buffer, modulo);
-    buffer_add_uint8(paquete->buffer, canal);
-    buffer_add_string(paquete->buffer, identificador);
+static int enviar_handshake_y_esperar_respuesta(int fd, t_paquete* paquete){
 
     // Envio el paquete
     int resultado = enviar_paquete(fd, paquete);
@@ -80,13 +73,34 @@ int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador
             fprintf(stderr, "enviar_handshake: op_code inesperado: %u\n", respuesta_op_code);
             return CONEXION_ERROR;
     }
-
-    return resultado;
+    
 }
 
+int enviar_handshake_core(int fd, t_modulo modulo, t_canal canal, char* identificador) {
+    // Creo el paquete de handshake
+    t_paquete* paquete = crear_paquete(HANDSHAKE);
 
-int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, char** identificador) {
-    *identificador = NULL;
+    // Agrego los datos del handshake al paquete
+    buffer_add_uint8(paquete->buffer, modulo);
+    buffer_add_uint8(paquete->buffer, canal);
+    buffer_add_string(paquete->buffer, identificador);
+
+
+    return enviar_handshake_y_esperar_respuesta(fd, paquete);
+}
+
+int enviar_handshake(int fd, t_modulo modulo, t_canal canal) {
+    // Creo el paquete de handshake
+    t_paquete* paquete = crear_paquete(HANDSHAKE);
+
+    // Agrego los datos del handshake al paquete
+    buffer_add_uint8(paquete->buffer, modulo);
+    buffer_add_uint8(paquete->buffer, canal);
+
+    return enviar_handshake_y_esperar_respuesta(fd, paquete);
+}
+
+static int recibir_payload_handshake(int fd, t_buffer** buffer){
 
     uint8_t op_code;
     int resultado = recibir_operacion(fd, &op_code);
@@ -100,40 +114,55 @@ int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* can
         return CONEXION_ERROR;
     }
 
-    t_buffer* buffer;
-    resultado = recibir_buffer(fd, &buffer);
+    resultado = recibir_buffer(fd, buffer);
     if (resultado != CONEXION_OK) {
         fprintf(stderr, "recibir_handshake: no llego el payload del handshake\n");
         return resultado;
     }
 
-    *cliente       = buffer_read_uint8(buffer);
-    *canal         = buffer_read_uint8(buffer);
-    *identificador = buffer_read_string(buffer);
-    eliminar_buffer(buffer);
+    return CONEXION_OK;
 
-    if (!handshake_valido(servidor, *cliente, *canal)) {
-        fprintf(stderr, "recibir_handshake: rechazado (modulo %d, canal %d)\n", *cliente, *canal);
+}
+
+static int validar_y_responder_handshake(int fd, t_modulo servidor, t_modulo cliente, t_canal canal){
+
+    if (!handshake_valido(servidor, cliente, canal)) {
+        fprintf(stderr, "recibir_handshake: rechazado (modulo %d, canal %d)\n", cliente, canal);
 
         t_paquete* rechazo = crear_paquete(HANDSHAKE_ERROR);
         buffer_add_string(rechazo->buffer, "modulo o canal no esperado por este servidor");
         enviar_paquete(fd, rechazo);
         eliminar_paquete(rechazo);
 
-        free(*identificador);
-        *identificador = NULL;
         return CONEXION_ERROR;
     }
 
     t_paquete* ok = crear_paquete(HANDSHAKE_OK);
-    resultado = enviar_paquete(fd, ok);
+    int resultado = enviar_paquete(fd, ok);
     eliminar_paquete(ok);
 
-    if (resultado != CONEXION_OK) {
-        free(*identificador);
-        *identificador = NULL;
-        return resultado;
+    return resultado;
+
+}
+
+int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, int* identificador) {
+    
+    t_buffer* buffer;
+
+    int resultado = recibir_payload_handshake(fd,&buffer);
+
+    if(resultado != CONEXION_OK) return resultado;
+
+    *cliente       = buffer_read_uint8(buffer);
+    *canal         = buffer_read_uint8(buffer);
+    *identificador = 1; //por las dudas, pero debemos poner en el arguemnto "1"
+    
+    if(*cliente == MODULO_CORE){
+        *identificador = (int) buffer_read_uint32(buffer);
     }
 
-    return CONEXION_OK;
-  }
+    eliminar_buffer(buffer);
+
+    return validar_y_responder_handshake(fd,servidor,*cliente,*canal);
+
+}

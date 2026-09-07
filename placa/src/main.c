@@ -40,7 +40,7 @@ void* atender_cliente(void* socket){
 
     t_modulo cliente;
     t_canal canal;
-    char* identificador;
+    int identificador;
 
     int resultado = recibir_handshake(socket_cliente, MODULO_PLACA, &cliente, &canal, &identificador);
 
@@ -127,12 +127,13 @@ void* atender_core(void* core){
             break;
             
         }      
-        case CONEXION_ERROR:{
+        
+        /*case CONEXION_ERROR:{
 
             log_error(placa_logger, "## CORE #agregarID# desconectada");
             liberar_conexion(&socket_cliente);
             break;
-        }
+        }*/
         
         default:
             log_warning(placa_logger, "Operación desconocida recibida de CORE: %d",operacion_core);
