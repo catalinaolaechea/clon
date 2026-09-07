@@ -10,6 +10,10 @@
 #include <pthread.h>
 #include <utils/handshake.h>
 
+//consola
+#include <readline/readline.h>
+#include <readline/history.h>
+
 extern t_config* placa_config;
 extern t_log* placa_logger;
 extern char* archivo_config;
@@ -46,5 +50,10 @@ void* atender_cliente(void* socket);
 void* atender_core(void* core);
 void* atender_planificador(void* panificador);
 
+//consola
+void* atender_consola(void* arg);
+void procesar_comando(char* linea);
+void comando_info();
+void comando_tls();
 
 #endif

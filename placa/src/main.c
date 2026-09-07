@@ -18,6 +18,11 @@ int main(int argc, char* argv[]) {
 
     log_info(placa_logger,"Servidor listo para recibir a los clientes");    
 
+    //consola
+    pthread_t hilo_consola;
+    pthread_create(&hilo_consola, NULL, atender_consola, NULL);
+    pthread_detach(hilo_consola);
+
 
     while(1){
         int socket_cliente = esperar_cliente(server_placa);
@@ -34,6 +39,65 @@ int main(int argc, char* argv[]) {
 
     return EXIT_FAILURE;
 }
+
+void* atender_consola(void* arg){
+    char* linea;
+
+    while((linea = readline("Placa> ")) !=NULL){
+        if(strlen(linea)>0){
+            add_history(linea);
+            procesar_comando(linea);
+        }
+        free(linea);
+    }
+    return NULL;
+}
+
+void procesar_comando(char* linea){
+    char** args = string_split(linea, " ");
+
+    if(strcmp(args[0], "INFO") ==0){
+        comando_info();
+    }else if(strcmp(args[0],"TLS") ==0){
+        comando_tls();
+    }else {
+        printf("Comando desconocido: %s\n",args[0]);
+    }
+
+    string_array_destroy(args);
+}
+
+void comando_info(){
+    pthread_mutex_lock(&mutex_lista_core);
+    int cantidad_cores = list_size(lista_core);
+    pthread_mutex_unlock(&mutex_lista_core);
+
+    printf("Cores conectados: %d\n", cantidad_cores);
+
+    /*Falta
+    porcentaje de memoria/offload
+    frames libres/lockeados/totales
+    cantidad de jobs
+    
+    */
+}
+
+void comando_tls(){
+    pthread_mutex_lock(&mutex_lista_core);
+
+    for(int i = 0; i < list_size(lista_core); i++){
+        t_core_placa* core = list_get(lista_core,i);
+        printf("Core conectado - ID: %d\n",core->id_core);
+    }
+
+    pthread_mutex_unlock(&mutex_lista_core);
+
+    /*Falta
+    Listar jobs(no cores) con paginas de conjunto residente/totales
+    */
+}
+
+
 
 void* atender_cliente(void* socket){
 
@@ -136,22 +200,35 @@ void* atender_core(void* args){
 
         }
         case FETCH_INSTRUCCION:{
+            
+            log_info(placa_logger, "## JID: #id# - Obtener instrucción: #pc# - Instrucción ");
+
             break;
 
         }
 
-        case RESPUESTA_INSTRUCCION:{
+        /*case LEER_DATO:{
+
             break;
             
         }
+        case ESCRIBIR_DATO:{
+
+            break;
+        }
+            
+        */
+
         case OBTENER_MARCO:{
             break;
             
         }
-        case RESPUESTA_MARCO:{
+
+        /*case RESPUESTA_MARCO:{
             break;
             
-        }
+        }*/
+
         case PAGE_FAULT:{
             break;
             
@@ -209,11 +286,29 @@ void* atender_planificador(void* planificador){
 
         }
         case CREAR_JOB:{
+
+            //falta id
+            log_info(placa_logger, "## JIB #id# - Job Creado ");
+
             break;
 
         }
 
+        /*case LEER_DATO:{
+            break;
+            
+        }
+        case ESCRIBIR_DATO:{
+            break;
+        
+        }
+            
+        */
+
         case FINALIZAR_JOB:{
+            
+
+            
             break;
             
         }
