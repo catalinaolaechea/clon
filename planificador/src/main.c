@@ -1,4 +1,5 @@
 #include "inicializador.h"
+#include "conexiones.h"
 #include "servidores_core.h"
 
 int main(int argc, char* argv[]) {
@@ -14,9 +15,7 @@ int main(int argc, char* argv[]) {
     inicializar_config();
     inicializar_log();
 
-    int socket_placa = crear_conexion(config_planificador.ip_placa,config_planificador.puerto_placa);
-
-    int conexion = enviar_handshake(socket_placa,MODULO_PLANIFICADOR,CANAL_UNICO); 
+    inicializar_conexiones();  // antes del servidor: si falla aborta y no levanta nada
 
     pthread_t hilo_servidor = iniciar_servidor_cores();
     pthread_join(hilo_servidor, NULL);
