@@ -49,9 +49,9 @@ static void desregistrar_core(char* identificador, t_canal canal) {
             }
 
             if (core->fd_dispatch == -1 && core->fd_interrupt == -1) {
+                list_remove(cores_conectados, i);
                 free(core->identificador);
                 free(core);
-                list_remove(cores_conectados, i);
             }
             break;
         }
@@ -107,6 +107,7 @@ static void* atender_core(void* ctx) {
         atender_mensaje(fd, op_code, identificador);
     }
 
+    desregistrar_core(identificador, canal);
     free(identificador);
     liberar_conexion(&fd);
 
