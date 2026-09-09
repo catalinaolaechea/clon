@@ -145,7 +145,7 @@ static int validar_y_responder_handshake(int fd, t_modulo servidor, t_modulo cli
 
 }
 
-int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, int* identificador) {
+int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, char** identificador) {
     
     t_buffer* buffer;
 
@@ -155,14 +155,22 @@ int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* can
 
     *cliente       = buffer_read_uint8(buffer);
     *canal         = buffer_read_uint8(buffer);
-    *identificador = 1; //por las dudas, pero debemos poner en el arguemnto "1"
+    *identificador = NULL;
     
     if(*cliente == MODULO_CORE){
-        *identificador = (int) buffer_read_uint32(buffer);
+        *identificador = buffer_read_string(buffer);
     }
 
     eliminar_buffer(buffer);
 
-    return validar_y_responder_handshake(fd,servidor,*cliente,*canal);
+    resultado = validar_y_responder_handshake(fd,servidor,*cliente,*canal);
 
+    if (resultado != CONEXION_OK) {
+        if(*identificador != NULL){
+            free(*identificador);
+            *identificador = NULL;
+        }
+    }
+
+    return resultado;
 }
