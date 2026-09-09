@@ -36,10 +36,34 @@ static void registrar_core(char* identificador, t_canal canal, int fd) {
     pthread_mutex_unlock(&mutex_cores);
 }
 
+static void desregistrar_core(char* identificador, t_canal canal) {
+    pthread_mutex_lock(&mutex_cores);
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (strcmp(core->identificador, identificador) == 0) {
+            if (canal == CANAL_DISPATCH) {
+                core->fd_dispatch = -1;
+            } else {
+                core->fd_interrupt = -1;
+            }
+
+            if (core->fd_dispatch == -1 && core->fd_interrupt == -1) {
+                free(core->identificador);
+                free(core);
+                list_remove(cores_conectados, i);
+            }
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+}
+
 static void atender_mensaje(int fd, uint8_t op_code, char* identificador) {
     switch (op_code) {
         case MENSAJE_PRUEBA:
-            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", *identificador);
+            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", identificador);
             break;
         default:
             log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
