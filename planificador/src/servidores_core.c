@@ -6,6 +6,7 @@ pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
 
 static int fd_servidor;
 
+
 static void atender_mensaje(int fd, uint8_t op_code, int identificador) {
     switch (op_code) {
         case MENSAJE_PRUEBA:
@@ -22,12 +23,12 @@ static void* atender_core(void* ctx) {
 
     t_modulo modulo;
     t_canal canal;
-    int identificador;
+    char* identificador;
 
     int handshake_result = recibir_handshake(fd, MODULO_PLANIFICADOR, &modulo, &canal, &identificador);
 
     if (handshake_result != CONEXION_OK) {
-        log_error(planificador_logger, "Error al recibir handshake del Core en el socket %d", fd);
+        log_error(planificador_logger, "Error al recibir handshake del Core en el socket %", fd);
         liberar_conexion(&fd);
         return NULL;
     }
@@ -39,12 +40,14 @@ static void* atender_core(void* ctx) {
         int result = recibir_operacion(fd, &op_code);
 
         if (result == CONEXION_ERROR) {
-            log_error(planificador_logger, "Error al recibir operación del Core con identificador: %d", identificador);
+            log_error(planificador_logger, "Error al recibir operación del Core con identificador: %s", identificador);
+            free(identificador);
             break;
         }
 
         if (result == CONEXION_DESCONECTADO) {
-            log_info(planificador_logger, "Core con identificador: %d se ha desconectado", identificador);
+            log_info(planificador_logger, "Core con identificador: %s se ha desconectado", identificador);
+            free(identificador);
             break;
         }
 
