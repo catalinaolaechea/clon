@@ -3,6 +3,8 @@
 #include <commons/log.h>  // t_log, log_info, log_destroy y log_level_from_string
 #include <utils/log.h>  // "iniciar_logger()" wrapper nuestro 
 #include "config.h"  // contrato con todo lo q se necesita para poder usar las funciones denotadas ahi
+#include <pthread.h>
+#include "servidor_planificador.h"
 
 #define STORAGE_ARCHIVO_LOG "runtime/storage.log"  // los archivos .log van en /runtime porque son artefactos que se generan al correr 
 
@@ -34,11 +36,20 @@ int main(int argc, char* argv[]) {  // "argc" = cantidad argumentos que vinieron
         return EXIT_FAILURE;
     }
 
-    log_info(logger, "Storage listo, pendiente: servidor multihilo, consola y formateo del volumen");
+    //todo issue-24  ----------------------------------------
+    //! 5) levantamos el servidor multihilo. Le pasamos el puerto que leimos del .config y el logger ya creado.
+    // La funcion abre el socket, larga el hilo que acepta conexiones y nos devuelve el identificador de ese hilo
+    pthread_t hilo_servidor = storage_servidor_iniciar(config->puerto_escucha, logger);
 
-    //! 5) todo lo que se pidio lo liberamos 
+    //! 6) y aca nos quedamos clavados. El hilo de escucha tiene un "while(1)" adentro asi que nunca termina, y
+    // ese es justamente el punto: si el main siguiera de largo llegaria al "return" de abajo, y cuando el hilo
+    // principal termina se muere el proceso ENTERO, servidor y conexiones incluidas. El join lo deja esperando
+    // sin quemar CPU, que es la forma de mantener vivo al Storage
+    pthread_join(hilo_servidor, NULL);
+
+    //! 7) todo lo que se pidio lo liberamos. En los hechos no se llega nunca aca (el join de arriba no vuelve),
+    // pero lo dejamos escrito igual: el dia que le agreguemos un cierre ordenado por SIGINT, esto ya va a estar
     log_destroy(logger);
     storage_config_destruir(config);
-
     return EXIT_SUCCESS;
 } 
