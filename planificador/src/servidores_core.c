@@ -7,10 +7,10 @@ pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
 static int fd_servidor;
 
 
-static void atender_mensaje(int fd, uint8_t op_code, int identificador) {
+static void atender_mensaje(int fd, uint8_t op_code, char* identificador) {
     switch (op_code) {
         case MENSAJE_PRUEBA:
-            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %d", identificador);
+            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", *identificador);
             break;
         default:
             log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
@@ -28,7 +28,7 @@ static void* atender_core(void* ctx) {
     int handshake_result = recibir_handshake(fd, MODULO_PLANIFICADOR, &modulo, &canal, &identificador);
 
     if (handshake_result != CONEXION_OK) {
-        log_error(planificador_logger, "Error al recibir handshake del Core en el socket %", fd);
+        log_error(planificador_logger, "Error al recibir handshake del Core en el socket %d", fd);
         liberar_conexion(&fd);
         return NULL;
     }
@@ -41,19 +41,18 @@ static void* atender_core(void* ctx) {
 
         if (result == CONEXION_ERROR) {
             log_error(planificador_logger, "Error al recibir operación del Core con identificador: %s", identificador);
-            free(identificador);
             break;
         }
 
         if (result == CONEXION_DESCONECTADO) {
             log_info(planificador_logger, "Core con identificador: %s se ha desconectado", identificador);
-            free(identificador);
             break;
         }
 
         atender_mensaje(fd, op_code, identificador);
     }
 
+    free(identificador);
     liberar_conexion(&fd);
 
     return NULL;
