@@ -6,6 +6,35 @@ pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
 
 static int fd_servidor;
 
+static void registrar_core(char* identificador, t_canal canal, int fd) {
+    pthread_mutex_lock(&mutex_cores);
+
+    t_core_conectado* core = NULL;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* actual = list_get(cores_conectados, i);
+        if (strcmp(actual->identificador, identificador) == 0) {
+            core = actual;
+            break;
+        }
+    }
+
+    if (core == NULL) {
+        core = malloc(sizeof(t_core_conectado));
+        core->identificador = strdup(identificador);
+        core->fd_dispatch = -1;
+        core->fd_interrupt = -1;
+        list_add(cores_conectados, core);
+    }
+
+    if (canal == CANAL_DISPATCH) {
+        core->fd_dispatch = fd;
+    } else {
+        core->fd_interrupt = fd;
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+}
 
 static void atender_mensaje(int fd, uint8_t op_code, char* identificador) {
     switch (op_code) {
@@ -34,6 +63,8 @@ static void* atender_core(void* ctx) {
     }
 
     log_info(planificador_logger, LOG_CONEXION_RECIBIDA, modulo_to_string(modulo));
+
+    registrar_core(identificador, canal, fd);
 
     while (1) {
         uint8_t op_code;
