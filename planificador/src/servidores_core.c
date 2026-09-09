@@ -64,7 +64,7 @@ static void desregistrar_core(char* identificador, t_canal canal) {
     log_info(planificador_logger, "Cores conectados post desregistro: %d", size_cores);
 }
 
-static void atender_mensaje(int fd, uint8_t op_code, char* identificador) {
+static void atender_mensaje(int fd, uint8_t op_code, char* identificador, t_buffer* buffer) {
     switch (op_code) {
         case MENSAJE_PRUEBA:
             log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", identificador);
@@ -108,7 +108,11 @@ static void* atender_core(void* ctx) {
             break;
         }
 
-        atender_mensaje(fd, op_code, identificador);
+        t_buffer* buffer;
+        result = recibir_buffer(fd, &buffer);
+
+        atender_mensaje(fd, op_code, identificador, buffer);
+        eliminar_buffer(buffer);
     }
 
     // TODO: Ante la desconexión de un core, el job que estaba ejecutando debe volver a READY

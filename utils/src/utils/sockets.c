@@ -52,12 +52,15 @@ int iniciar_servidor(char* puerto) {
 }
 
 int esperar_cliente(int socket_servidor) {
-    int socket_cliente = accept(socket_servidor, NULL, NULL);
-    if (socket_cliente == -1) {
-        fprintf(stderr, "esperar_cliente: accept: %s\n", strerror(errno));
-        return -1;
+    while (1) {
+        int socket_cliente = accept(socket_servidor, NULL, NULL);
+        if (socket_cliente == -1) {
+            if (errno == EINTR) continue;  // si nos interrumpieron con una señal, reintentamos
+            fprintf(stderr, "esperar_cliente: accept: %s\n", strerror(errno));
+            return -1;
+        }
+        return socket_cliente;
     }
-    return socket_cliente;
 }
 
 int crear_conexion(char* ip, char* puerto) {
