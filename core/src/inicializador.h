@@ -13,11 +13,15 @@ extern t_log* core_logger;
 extern char* archivo_config;
 extern char* identificador;
 
-extern char* LOG_LEVEL;
-extern char* IP_PLANIFICADOR;
-extern char* PUERTO_PLANIFICADOR; 
-extern char* IP_PLACA;
-extern char* PUERTO_PLACA; 
+typedef struct {
+    char* log_level;
+    char* ip_planificador;
+    char* puerto_planificador;
+    char* ip_placa;
+    char* puerto_placa;
+} t_config_core;
+
+extern t_config_core configuracion;
 
 void inicializar_config();
 void inicializar_log();

@@ -5,26 +5,21 @@ t_log* core_logger;
 char* archivo_config;
 char* identificador;
 
-char* LOG_LEVEL;
-char* IP_PLANIFICADOR;
-char* PUERTO_PLANIFICADOR;
-char* IP_PLACA;
-char* PUERTO_PLACA;
-
+t_config_core configuracion;
 
 void inicializar_config() {
-    core_config = iniciar_config(archivo_config); 
-    LOG_LEVEL           = so_config_get_string(core_config, "CORE", "LOG_LEVEL");
-    IP_PLANIFICADOR     = so_config_get_string(core_config, "CORE", "IP_PLANIFICADOR");
-    PUERTO_PLANIFICADOR = so_config_get_string(core_config, "CORE", "PUERTO_PLANIFICADOR");
-    IP_PLACA            = so_config_get_string(core_config, "CORE", "IP_PLACA");
-    PUERTO_PLACA        = so_config_get_string(core_config, "CORE", "PUERTO_PLACA");
+    core_config = iniciar_config(archivo_config);
+    configuracion.log_level           = so_config_get_string(core_config, "CORE", "LOG_LEVEL");
+    configuracion.ip_planificador     = so_config_get_string(core_config, "CORE", "IP_PLANIFICADOR");
+    configuracion.puerto_planificador = so_config_get_string(core_config, "CORE", "PUERTO_PLANIFICADOR");
+    configuracion.ip_placa            = so_config_get_string(core_config, "CORE", "IP_PLACA");
+    configuracion.puerto_placa        = so_config_get_string(core_config, "CORE", "PUERTO_PLACA");
 }
 
 void inicializar_log() {
     char nombre_log[64];
     snprintf(nombre_log, sizeof(nombre_log), "core%s.log", identificador);
  
-    t_log_level nivel = log_level_from_string(LOG_LEVEL);
+    t_log_level nivel = log_level_from_string(configuracion.log_level);
     core_logger = iniciar_logger(nombre_log, "CORE", nivel);
 }
