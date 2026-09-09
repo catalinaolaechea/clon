@@ -33,7 +33,9 @@ static void registrar_core(char* identificador, t_canal canal, int fd) {
         core->fd_interrupt = fd;
     }
 
+    int size_cores = list_size(cores_conectados);
     pthread_mutex_unlock(&mutex_cores);
+    log_info(planificador_logger, "Cores conectados post registro: %d", size_cores);
 }
 
 static void desregistrar_core(char* identificador, t_canal canal) {
@@ -57,7 +59,9 @@ static void desregistrar_core(char* identificador, t_canal canal) {
         }
     }
 
+    int size_cores = list_size(cores_conectados);
     pthread_mutex_unlock(&mutex_cores);
+    log_info(planificador_logger, "Cores conectados post desregistro: %d", size_cores);
 }
 
 static void atender_mensaje(int fd, uint8_t op_code, char* identificador) {
@@ -107,6 +111,8 @@ static void* atender_core(void* ctx) {
         atender_mensaje(fd, op_code, identificador);
     }
 
+    // TODO: Ante la desconexión de un core, el job que estaba ejecutando debe volver a READY
+    // y debe solicitar a la placa el deslockeo de sus paginas
     desregistrar_core(identificador, canal);
     free(identificador);
     liberar_conexion(&fd);
