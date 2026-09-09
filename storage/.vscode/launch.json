@@ -6,9 +6,9 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/bin/${workspaceFolderBasename}",
-      "args": [],
+      "args": ["${workspaceFolder}/storage.config"],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/..",
       "environment": [],
       "externalConsole": false,
       "linux": {
