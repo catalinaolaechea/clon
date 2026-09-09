@@ -252,6 +252,7 @@ void* atender_core(void* args){
     pthread_mutex_unlock(&mutex_lista_core);
 
     liberar_conexion(&socket_cliente);
+    free(core->id_core);
     free(core);
 
     return NULL;

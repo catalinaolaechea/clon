@@ -26,7 +26,7 @@ int conectar_a_modulo(char* ip, char* puerto, t_modulo modulo_destino) {
         return ERROR_CONEXION;
     }
 
-    int resultado = enviar_handshake(fd, MODULO_PLANIFICADOR, CANAL_UNICO);
+    int resultado = enviar_handshake(fd, MODULO_PLANIFICADOR, CANAL_UNICO, NULL);
 
     if (resultado != CONEXION_OK) {
         log_error(planificador_logger, "Handshake rechazado por %s (%s:%s), resultado %d",

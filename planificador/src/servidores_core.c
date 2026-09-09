@@ -111,6 +111,11 @@ static void* atender_core(void* ctx) {
         t_buffer* buffer;
         result = recibir_buffer(fd, &buffer);
 
+        if (result != CONEXION_OK) {
+            log_error(planificador_logger, "Error al recibir el payload del Core con identificador: %s", identificador);
+            break;
+        }
+
         atender_mensaje(fd, op_code, identificador, buffer);
         eliminar_buffer(buffer);
     }
