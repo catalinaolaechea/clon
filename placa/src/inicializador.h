@@ -7,6 +7,12 @@
 #include <utils/utils.h>
 #include <utils/config.h>
 #include <utils/log.h>
+#include <pthread.h>
+#include <utils/handshake.h>
+
+//consola
+#include <readline/readline.h>
+#include <readline/history.h>
 
 extern t_config* placa_config;
 extern t_log* placa_logger;
@@ -24,9 +30,30 @@ extern char* PATH_OFFLOAD;
 extern int TAM_OFFLOAD;
 extern int RETARDO_OFFLOAD;
 
+//variables globables
+extern t_list* lista_core;
+
+//semaforos
+extern pthread_mutex_t mutex_lista_core;
+extern pthread_mutex_t  mutex_procesos;
+
+typedef struct {
+    int socket_core;
+    int id_core;
+}t_core_placa;
 
 void inicializar_log();
 void inicializar_config();
 
+//funciones de servidor
+void* atender_cliente(void* socket);
+void* atender_core(void* core);
+void* atender_planificador(void* panificador);
+
+//consola
+void* atender_consola(void* arg);
+void procesar_comando(char* linea);
+void comando_info();
+void comando_tls();
 
 #endif

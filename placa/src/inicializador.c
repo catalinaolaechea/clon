@@ -17,6 +17,12 @@ char* PATH_OFFLOAD;
 int TAM_OFFLOAD;
 int RETARDO_OFFLOAD;
 
+t_list* lista_core = NULL;
+
+//semaforos
+pthread_mutex_t mutex_lista_core = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_procesos = PTHREAD_MUTEX_INITIALIZER;
+
 
 void inicializar_log(){
     //placa_logger = log_create("placa.log","LOGGER_PLACA",true,LOG_LEVEL_TRACE);

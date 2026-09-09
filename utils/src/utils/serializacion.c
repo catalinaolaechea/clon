@@ -1,5 +1,7 @@
 #include "serializacion.h"
-
+#include <sys/socket.h>
+#include <errno.h>
+#include <unistd.h>
 
 // No van en el header porque son funciones privadas de este módulo
 static int enviar_todo(int fd, void* datos, uint32_t size) {
@@ -45,68 +47,38 @@ void eliminar_buffer(t_buffer* buffer) {
     free(buffer);
 }
 
-/*
-int enviar_paquete(int fd, t_paquete* paquete) {
-    uint32_t total = sizeof(uint8_t) + sizeof(uint32_t) + paquete->buffer->size;
-    void* datos = malloc(total);
+static void* serializar_paquete(t_paquete* paquete, uint32_t bytes) {
+    void* magic = malloc(bytes);
+    uint32_t desplazamiento = 0;
 
-    uint32_t offset = 0;
-    memcpy(datos + offset, &paquete->op_code, sizeof(uint8_t));
-    offset += sizeof(uint8_t);
-    memcpy(datos + offset, &paquete->buffer->size, sizeof(uint32_t));
-    offset += sizeof(uint32_t);
-    if (paquete->buffer->size > 0){
-        memcpy(datos + offset, paquete->buffer->stream, paquete->buffer->size);
+    memcpy(magic + desplazamiento, &(paquete->op_code), sizeof(uint8_t));
+    desplazamiento += sizeof(uint8_t);
+    memcpy(magic + desplazamiento, &(paquete->buffer->size), sizeof(uint32_t));
+    desplazamiento += sizeof(uint32_t);
+    if (paquete->buffer->size > 0) {
+        memcpy(magic + desplazamiento, paquete->buffer->stream, paquete->buffer->size);
+        desplazamiento += paquete->buffer->size;
     }
 
-    int resultado = enviar_todo(fd, datos, total);
-
-    free(datos);
-    return resultado;
+    return magic;
 }
-*/
 
-//Funciones del tp0 adaptadas 
-
-//modificado
-int enviar_paquete(int socket_cliente, t_paquete* paquete){
-
+int enviar_paquete(int fd, t_paquete* paquete) {
     if (paquete == NULL || paquete->buffer == NULL) {
         fprintf(stderr, "enviar_paquete: paquete inválido\n");
-        return -1;
+        return CONEXION_ERROR;
     }
 
     uint32_t bytes = sizeof(uint8_t) + sizeof(uint32_t) + paquete->buffer->size;
 
     void* a_enviar = serializar_paquete(paquete, bytes);
 
-    int resultado = enviar_todo(socket_cliente, a_enviar, bytes);
-
-    //send(socket_cliente, a_enviar,bytes,0);
+    int resultado = enviar_todo(fd, a_enviar, bytes);
 
     free(a_enviar);
 
     return resultado;
 }
-
-//modificado
-void* serializar_paquete(t_paquete* paquete, int bytes)
-{
-	void * magic = malloc(bytes);
-	int desplazamiento = 0;
-
-	memcpy(magic + desplazamiento, &(paquete->op_code), sizeof(uint8_t));
-	desplazamiento+= sizeof(uint8_t);
-	memcpy(magic + desplazamiento, &(paquete->buffer->size), sizeof(uint32_t));
-	desplazamiento+= sizeof(uint32_t);
-    if (paquete->buffer->size > 0){
-        memcpy(magic + desplazamiento, paquete->buffer->stream, paquete->buffer->size);
-	    desplazamiento+= paquete->buffer->size;
-    }
-
-	return magic;
-}
-
 
 int recibir_buffer(int fd, t_buffer** buffer) {
     *buffer = NULL; // inicializar el puntero a NULL en caso de error
@@ -141,6 +113,21 @@ int recibir_buffer(int fd, t_buffer** buffer) {
     return CONEXION_OK;
 }
 
+int recibir_operacion(int fd, uint8_t* op_code) {
+    int resultado = recibir_todo(fd, op_code, sizeof(uint8_t));
+    return resultado;
+}
+
+t_paquete* crear_paquete(uint8_t op_code) {
+    t_paquete* paquete = malloc(sizeof(t_paquete));
+    paquete->op_code = op_code;
+    paquete->buffer = malloc(sizeof(t_buffer));
+    paquete->buffer->size = 0;
+    paquete->buffer->offset = 0;
+    paquete->buffer->stream = NULL;
+    return paquete;
+}
+
 //Añadido
 t_list* recibir_paquete(int socket_cliente)
 {
@@ -168,20 +155,6 @@ t_list* recibir_paquete(int socket_cliente)
 	return valores;
 }
 
-int recibir_operacion(int fd, uint8_t* op_code) {
-    int resultado = recibir_todo(fd, op_code, sizeof(uint8_t));
-    return resultado;
-}
-
-t_paquete* crear_paquete(uint8_t op_code) {
-    t_paquete* paquete = malloc(sizeof(t_paquete));
-    paquete->op_code = op_code;
-    paquete->buffer = malloc(sizeof(t_buffer));
-    paquete->buffer->size = 0;
-    paquete->buffer->offset = 0;
-    paquete->buffer->stream = NULL;
-    return paquete;
-}
 
 void eliminar_paquete(t_paquete* paquete) {
     eliminar_buffer(paquete->buffer);
@@ -232,7 +205,3 @@ char* buffer_read_string(t_buffer* buffer) {
     buffer_read(buffer, str, longitud);
     return str;
 }
-
-
-
-

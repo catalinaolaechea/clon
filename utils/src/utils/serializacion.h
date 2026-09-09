@@ -5,11 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <string.h>
 #include <assert.h>
-#include <sys/socket.h> 
-#include <errno.h>
-#include <unistd.h>
 #include <commons/collections/list.h>
 
 #define TAM_MAXIMO_PAYLOAD (16 * 1024 * 1024) 
@@ -33,12 +29,9 @@ t_paquete* crear_paquete(uint8_t op_code);
 void eliminar_paquete(t_paquete* paquete);
 int enviar_paquete(int fd, t_paquete* paquete);
 int recibir_operacion(int fd, uint8_t* op_code);
-int recibir_operacion1(int fd);
 void eliminar_buffer(t_buffer* buffer);
 int recibir_buffer(int fd, t_buffer** buffer);
 t_list* recibir_paquete(int socket_cliente);
-void* serializar_paquete(t_paquete* paquete, int bytes);
-
 
 void buffer_add_uint32(t_buffer* buffer, uint32_t valor);
 void buffer_add_uint8 (t_buffer* buffer, uint8_t valor);
