@@ -17,11 +17,9 @@ static void conectar_a_modulo(int* fd_destino, char* ip, char* puerto, t_modulo 
     }
  
     
-    int id_numerico = atoi(identificador);
- 
     t_canal canal = (modulo_servidor == MODULO_PLANIFICADOR) ? CANAL_DISPATCH : CANAL_UNICO;
  
-    if (enviar_handshake(fd, MODULO_CORE, canal, id_numerico) != CONEXION_OK) {
+    if (enviar_handshake(fd, MODULO_CORE, canal, identificador) != CONEXION_OK) {
         log_error(core_logger, "Handshake rechazado por %s", modulo_to_string(modulo_servidor));
         exit(EXIT_FAILURE);
     }

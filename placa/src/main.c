@@ -87,7 +87,7 @@ void comando_tls(){
 
     for(int i = 0; i < list_size(lista_core); i++){
         t_core_placa* core = list_get(lista_core,i);
-        printf("Core conectado - ID: %d\n",core->id_core);
+        printf("Core conectado - ID: %s\n",core->id_core);
     }
 
     pthread_mutex_unlock(&mutex_lista_core);
@@ -106,7 +106,7 @@ void* atender_cliente(void* socket){
 
     t_modulo cliente;
     t_canal canal;
-    int identificador;
+    char* identificador;
 
     int resultado = recibir_handshake(socket_cliente, MODULO_PLACA, &cliente, &canal, &identificador);
 
@@ -138,7 +138,7 @@ void* atender_cliente(void* socket){
             core->socket_core = socket_cliente;
             core->id_core = identificador;
 
-            log_info(placa_logger,"## Módulo: %s %d", "Core",core->id_core);
+            log_info(placa_logger,"## Módulo: %s %s", "Core",core->id_core);
 
             pthread_mutex_lock(&mutex_lista_core);
                 list_add(lista_core,core);
@@ -177,12 +177,12 @@ void* atender_core(void* args){
         
 
         if (codigo_validacion == CONEXION_ERROR) {
-            log_error(placa_logger, "Operación desconocida recibida de CORE %d: %d", core->id_core, operacion_core);
+            log_error(placa_logger, "Operación desconocida recibida de CORE %s: %d", core->id_core, operacion_core);
             break;
         }
 
         if (codigo_validacion == CONEXION_DESCONECTADO) {
-            log_info(placa_logger, " ## Core %d se ha desconectado", core->id_core);
+            log_info(placa_logger, " ## Core %s se ha desconectado", core->id_core);
             break;
         }
 
@@ -190,7 +190,7 @@ void* atender_core(void* args){
         switch (operacion_core)
         {
         case MENSAJE_PRUEBA:{
-            log_info(placa_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %d", core->id_core);
+            log_info(placa_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", core->id_core);
             
             t_paquete* eco = crear_paquete(MENSAJE_PRUEBA_ECO);
             enviar_paquete(core->socket_core,eco);
@@ -252,6 +252,7 @@ void* atender_core(void* args){
     pthread_mutex_unlock(&mutex_lista_core);
 
     liberar_conexion(&socket_cliente);
+    free(core->id_core);
     free(core);
 
     return NULL;

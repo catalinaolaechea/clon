@@ -39,7 +39,7 @@ static void* atender_planificador(void* ctx) {
     // logueando basura de la pila justo aca abajo, en el mensaje de rechazo
     t_modulo modulo = MODULO_INVALIDO;
     t_canal canal;
-    int identificador;  // lo pide la firma de utils; solo el Core manda uno real, el Planificador no
+    char* identificador;  // lo pide la firma de utils; solo el Core manda uno real, el Planificador no
 
     if (recibir_handshake(fd, MODULO_STORAGE, &modulo, &canal, &identificador) != CONEXION_OK) {
         //! utils ya rechazo y le contesto al cliente por nosotros: su tabla dice que al Storage solo le

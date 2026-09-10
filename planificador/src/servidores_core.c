@@ -6,10 +6,68 @@ pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
 
 static int fd_servidor;
 
-static void atender_mensaje(int fd, uint8_t op_code, int identificador) {
+static void registrar_core(char* identificador, t_canal canal, int fd) {
+    pthread_mutex_lock(&mutex_cores);
+
+    t_core_conectado* core = NULL;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* actual = list_get(cores_conectados, i);
+        if (strcmp(actual->identificador, identificador) == 0) {
+            core = actual;
+            break;
+        }
+    }
+
+    if (core == NULL) {
+        core = malloc(sizeof(t_core_conectado));
+        core->identificador = strdup(identificador);
+        core->fd_dispatch = -1;
+        core->fd_interrupt = -1;
+        list_add(cores_conectados, core);
+    }
+
+    if (canal == CANAL_DISPATCH) {
+        core->fd_dispatch = fd;
+    } else {
+        core->fd_interrupt = fd;
+    }
+
+    int size_cores = list_size(cores_conectados);
+    pthread_mutex_unlock(&mutex_cores);
+    log_info(planificador_logger, "Cores conectados post registro: %d", size_cores);
+}
+
+static void desregistrar_core(char* identificador, t_canal canal) {
+    pthread_mutex_lock(&mutex_cores);
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (strcmp(core->identificador, identificador) == 0) {
+            if (canal == CANAL_DISPATCH) {
+                core->fd_dispatch = -1;
+            } else {
+                core->fd_interrupt = -1;
+            }
+
+            if (core->fd_dispatch == -1 && core->fd_interrupt == -1) {
+                list_remove(cores_conectados, i);
+                free(core->identificador);
+                free(core);
+            }
+            break;
+        }
+    }
+
+    int size_cores = list_size(cores_conectados);
+    pthread_mutex_unlock(&mutex_cores);
+    log_info(planificador_logger, "Cores conectados post desregistro: %d", size_cores);
+}
+
+static void atender_mensaje(int fd, uint8_t op_code, char* identificador, t_buffer* buffer) {
     switch (op_code) {
         case MENSAJE_PRUEBA:
-            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %d", identificador);
+            log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %s", identificador);
             break;
         default:
             log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
@@ -22,7 +80,7 @@ static void* atender_core(void* ctx) {
 
     t_modulo modulo;
     t_canal canal;
-    int identificador;
+    char* identificador;
 
     int handshake_result = recibir_handshake(fd, MODULO_PLANIFICADOR, &modulo, &canal, &identificador);
 
@@ -34,23 +92,38 @@ static void* atender_core(void* ctx) {
 
     log_info(planificador_logger, LOG_CONEXION_RECIBIDA, modulo_to_string(modulo));
 
+    registrar_core(identificador, canal, fd);
+
     while (1) {
         uint8_t op_code;
         int result = recibir_operacion(fd, &op_code);
 
         if (result == CONEXION_ERROR) {
-            log_error(planificador_logger, "Error al recibir operación del Core con identificador: %d", identificador);
+            log_error(planificador_logger, "Error al recibir operación del Core con identificador: %s", identificador);
             break;
         }
 
         if (result == CONEXION_DESCONECTADO) {
-            log_info(planificador_logger, "Core con identificador: %d se ha desconectado", identificador);
+            log_info(planificador_logger, "Core con identificador: %s se ha desconectado", identificador);
             break;
         }
 
-        atender_mensaje(fd, op_code, identificador);
+        t_buffer* buffer;
+        result = recibir_buffer(fd, &buffer);
+
+        if (result != CONEXION_OK) {
+            log_error(planificador_logger, "Error al recibir el payload del Core con identificador: %s", identificador);
+            break;
+        }
+
+        atender_mensaje(fd, op_code, identificador, buffer);
+        eliminar_buffer(buffer);
     }
 
+    // TODO: Ante la desconexión de un core, el job que estaba ejecutando debe volver a READY
+    // y debe solicitar a la placa el deslockeo de sus paginas
+    desregistrar_core(identificador, canal);
+    free(identificador);
     liberar_conexion(&fd);
 
     return NULL;
