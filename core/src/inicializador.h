@@ -11,7 +11,7 @@
 extern t_config* core_config;
 extern t_log* core_logger;
 extern char* archivo_config;
-extern char* identificador;
+extern int identificador;
 
 typedef struct {
     char* log_level;

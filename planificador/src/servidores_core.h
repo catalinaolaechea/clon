@@ -9,7 +9,7 @@
 #define THREAD_CREATED 0
 
 typedef struct {
-    char* identificador;   // el que mandó el Core en el handshake
+    int identificador;   // el que mandó el Core en el handshake
     int   fd_dispatch;     // -1 mientras no se conectó ese canal
     int   fd_interrupt;
 } t_core_conectado;

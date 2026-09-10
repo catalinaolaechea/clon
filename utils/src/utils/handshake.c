@@ -82,7 +82,7 @@ static int enviar_handshake_y_esperar_respuesta(int fd, t_paquete* paquete){
 
 }
 
-int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador) {
+int enviar_handshake(int fd, t_modulo modulo, t_canal canal, int identificador) {
     // Creo el paquete de handshake
     t_paquete* paquete = crear_paquete(HANDSHAKE);
 
@@ -91,7 +91,7 @@ int enviar_handshake(int fd, t_modulo modulo, t_canal canal, char* identificador
     buffer_add_uint8(paquete->buffer, canal);
 
     if (requiere_identificador(modulo)) {
-        buffer_add_string(paquete->buffer, identificador);
+        buffer_add_uint8(paquete->buffer, identificador);
     }
 
     return enviar_handshake_y_esperar_respuesta(fd, paquete);
@@ -142,7 +142,7 @@ static int validar_y_responder_handshake(int fd, t_modulo servidor, t_modulo cli
 
 }
 
-int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, char** identificador) {
+int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* canal, int* identificador) {
 
     t_buffer* buffer;
 
@@ -152,21 +152,15 @@ int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* can
 
     *cliente       = buffer_read_uint8(buffer);
     *canal         = buffer_read_uint8(buffer);
-    *identificador = NULL;   // los modulos unicos no mandan identificador
+    *identificador = 0;   // los modulos unicos no mandan identificador
 
     if (requiere_identificador(*cliente)) {
-        *identificador = buffer_read_string(buffer);
+        *identificador = buffer_read_int(buffer);
     }
 
     eliminar_buffer(buffer);
 
     resultado = validar_y_responder_handshake(fd, servidor, *cliente, *canal);
-
-    // si se rechaza, el que llama no se queda con nada que liberar
-    if (resultado != CONEXION_OK) {
-        free(*identificador);
-        *identificador = NULL;
-    }
 
     return resultado;
 }

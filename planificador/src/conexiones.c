@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define INTENTOS_CONEXION 3                    // tolera que Placa o Storage tarden en levantar
+#define INTENTOS_CONEXION 300                    // tolera que Placa o Storage tarden en levantar
 #define ESPERA_ENTRE_INTENTOS_US (500 * 1000)  // 500 ms, 1 segundo de tolerancia total
 
 t_conexiones_planificador conexiones_planificador = {
@@ -26,7 +26,7 @@ int conectar_a_modulo(char* ip, char* puerto, t_modulo modulo_destino) {
         return ERROR_CONEXION;
     }
 
-    int resultado = enviar_handshake(fd, MODULO_PLANIFICADOR, CANAL_UNICO, NULL);
+    int resultado = enviar_handshake(fd, MODULO_PLANIFICADOR, CANAL_UNICO,0);
 
     if (resultado != CONEXION_OK) {
         log_error(planificador_logger, "Handshake rechazado por %s (%s:%s), resultado %d",

@@ -39,7 +39,7 @@ extern pthread_mutex_t  mutex_procesos;
 
 typedef struct {
     int socket_core;
-    char* id_core;
+    int id_core;
 }t_core_placa;
 
 void inicializar_log();
