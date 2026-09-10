@@ -3,7 +3,7 @@
 t_config* core_config;
 t_log* core_logger;
 char* archivo_config;
-char* identificador;
+int identificador;
 
 t_config_core configuracion;
 
@@ -18,7 +18,7 @@ void inicializar_config() {
 
 void inicializar_log() {
     char nombre_log[64];
-    snprintf(nombre_log, sizeof(nombre_log), "core%s.log", identificador);
+    snprintf(nombre_log, sizeof(nombre_log), "core%d.log", identificador);
  
     t_log_level nivel = log_level_from_string(configuracion.log_level);
     core_logger = iniciar_logger(nombre_log, "CORE", nivel);
