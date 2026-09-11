@@ -2,6 +2,7 @@
 #define CONEXIONES_H
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <utils/protocolo.h>
 
 #define ERROR_CONEXION -1
@@ -18,5 +19,9 @@ extern t_conexiones_planificador conexiones_planificador;
 
 int conectar_a_modulo(char* ip, char* puerto, t_modulo modulo_destino);  // devuelve el fd o ERROR_CONEXION
 void inicializar_conexiones(void);  // conecta Placa y Storage en ese orden, aborta si alguna falla
+
+// Round-trip de MENSAJE_PRUEBA contra Placa y Storage: manda, espera el eco y compara campo por
+// campo. Devuelve false si alguno de los cuatro intercambios no volvio identico.
+bool probar_round_trip(void);
 
 #endif

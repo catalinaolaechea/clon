@@ -17,6 +17,8 @@ int main(int argc, char* argv[]) {
 
     inicializar_conexiones();  // antes del servidor: si falla aborta y no levanta nada
 
+    probar_round_trip();  // Check 1: ida y vuelta de un paquete con Placa y Storage
+
     pthread_t hilo_servidor = iniciar_servidor_cores();
     pthread_join(hilo_servidor, NULL);
     log_destroy(planificador_logger);
