@@ -9,19 +9,35 @@
 #include <utils/handshake.h>      // recibir_handshake
 #include <utils/protocolo.h>      // t_modulo, modulo_to_string y el texto del log obligatorio
 #include <utils/serializacion.h>  // recibir_operacion, recibir_buffer, t_buffer y los CONEXION_*
+#include <utils/mensaje_prueba.h> // armado, lectura y eco del mensaje del check 1
 
 static t_log* logger;    // el logger que nos pasa el main, lo guardamos para no arrastrarlo en cada firma
 static int fd_servidor;  // el socket de escucha, el que esta "atado" al puerto y recibe las conexiones
 
 
-//! aca va a ir el switch de los mensajes que nos mande el Planificador. Por ahora no hay ninguno definido
-// (el MENSAJE_PRUEBA es de SIS-35 y los SAVE/LOAD/DELETE_CHECKPOINT son del check 3), asi que lo unico que
-// hacemos es avisar por log que llego algo que no sabemos atender, sin cortar la conexion por eso
+//! el switch de los mensajes que nos mande el Planificador. Por ahora solo esta el MENSAJE_PRUEBA del
+// check 1; los SAVE/LOAD/DELETE_CHECKPOINT son del check 3. Lo que no sabemos atender se loguea y sigue,
+// sin cortar la conexion por eso
 static void atender_mensaje(int fd, uint8_t op_code, t_buffer* payload) {
-    (void) fd;       // todavia no le respondemos nada al Planificador, pero lo vamos a necesitar en SIS-35
-    (void) payload;  // idem: el contenido del mensaje recien se lee cuando haya mensajes que leer
-
     switch (op_code) {
+        case MENSAJE_PRUEBA: {
+            //! el eco devuelve los campos SIN modificar: es el otro lado el que compara y decide si paso
+            t_mensaje_prueba* mensaje = mensaje_prueba_leer(payload);
+
+            if (mensaje == NULL) {
+                log_error(logger, "MENSAJE_PRUEBA mal formado en el socket %d", fd);
+                break;
+            }
+
+            mensaje_prueba_loguear(logger, "MENSAJE_PRUEBA recibido del Planificador", mensaje);
+
+            if (mensaje_prueba_responder_eco(fd, mensaje) != CONEXION_OK) {
+                log_error(logger, "No se pudo responder el eco en el socket %d", fd);
+            }
+
+            mensaje_prueba_destruir(mensaje);
+            break;
+        }
         default:
             log_warning(logger, "Codigo de operacion desconocido recibido: %u", op_code);
     }
