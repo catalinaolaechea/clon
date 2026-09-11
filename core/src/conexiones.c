@@ -33,4 +33,35 @@ void conectar_a_planificador_y_placa() {
     conectar_a_modulo(&fd_planificador, configuracion.ip_planificador, configuracion.puerto_planificador, MODULO_PLANIFICADOR);
     conectar_a_modulo(&fd_placa, configuracion.ip_placa, configuracion.puerto_placa, MODULO_PLACA);
 }
+
+bool probar_round_trip(void) {
+
+    struct { int fd; t_modulo modulo; } destinos[] = {
+        { fd_planificador, MODULO_PLANIFICADOR },
+        { fd_placa,        MODULO_PLACA        }
+    };
+
+    // uno chico y uno de mas de 4 KB por modulo: el grande obliga al recv del otro lado a loopear
+    uint32_t tamanios[] = { PRUEBA_RELLENO_CHICO, PRUEBA_RELLENO_GRANDE };
+
+    uint32_t secuencia = 0;
+    bool todos_ok = true;
+
+    for (size_t d = 0; d < sizeof(destinos) / sizeof(destinos[0]); d++) {
+        for (size_t t = 0; t < sizeof(tamanios) / sizeof(tamanios[0]); t++) {
+
+            secuencia++;
+            // sin mutex: cada fd del Core lo usa un solo hilo
+            bool ok = mensaje_prueba_round_trip(destinos[d].fd, NULL, core_logger, MODULO_CORE,
+                                                destinos[d].modulo, secuencia, tamanios[t]);
+
+            log_info(core_logger, "Core %d - Round-trip con %s (relleno %u B): %s",
+                     identificador, modulo_to_string(destinos[d].modulo), tamanios[t], ok ? "OK" : "FALLO");
+
+            todos_ok = todos_ok && ok;
+        }
+    }
+
+    return todos_ok;
+}
  

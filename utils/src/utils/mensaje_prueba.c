@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <commons/string.h>
 
 // El relleno lleva un patron deterministico y no ceros: si el loop de recv se saltea o duplica
 // bytes, el patron se corre y la comparacion del eco lo detecta. 251 es primo para que el ciclo
@@ -137,4 +138,65 @@ void mensaje_prueba_destruir(t_mensaje_prueba* mensaje) {
     free(mensaje->texto);
     free(mensaje->relleno);
     free(mensaje);
+}
+
+bool mensaje_prueba_round_trip(int fd, pthread_mutex_t* mutex, t_log* logger, t_modulo origen,
+                               t_modulo destino, uint32_t secuencia, uint32_t tamanio_relleno) {
+
+    char* nombre = modulo_to_string(destino);
+
+    t_mensaje_prueba* enviado = mensaje_prueba_crear(origen, secuencia, tamanio_relleno, "round-trip del Check 1");
+    t_paquete* paquete = mensaje_prueba_empaquetar(enviado, MENSAJE_PRUEBA);
+
+    char* rotulo = string_from_format("MENSAJE_PRUEBA enviado a %s", nombre);
+    mensaje_prueba_loguear(logger, rotulo, enviado);
+    free(rotulo);
+
+    uint8_t op_code = 0;
+    t_buffer* respuesta = NULL;
+
+    // El envio y la espera del eco van sin soltar el lock: el protocolo admite una sola operacion en
+    // vuelo por socket, y si se soltara entre medio dos hilos cruzarian las respuestas.
+    if (mutex != NULL) pthread_mutex_lock(mutex);
+
+    int resultado = enviar_paquete(fd, paquete);
+    if (resultado == CONEXION_OK) resultado = recibir_operacion(fd, &op_code);
+    if (resultado == CONEXION_OK) resultado = recibir_buffer(fd, &respuesta);
+
+    if (mutex != NULL) pthread_mutex_unlock(mutex);
+
+    eliminar_paquete(paquete);
+
+    bool coincide = false;
+
+    if (resultado != CONEXION_OK) {
+        log_error(logger, "MENSAJE_PRUEBA con %s: se corto la comunicacion (resultado %d)", nombre, resultado);
+
+    } else if (op_code != MENSAJE_PRUEBA_ECO) {
+        log_error(logger, "MENSAJE_PRUEBA con %s: respondio op_code %u en vez de %u", nombre, op_code, MENSAJE_PRUEBA_ECO);
+
+    } else {
+        t_mensaje_prueba* recibido = mensaje_prueba_leer(respuesta);
+
+        if (recibido == NULL) {
+            log_error(logger, "El eco de %s vino mal formado", nombre);
+        } else {
+            rotulo = string_from_format("MENSAJE_PRUEBA_ECO recibido de %s", nombre);
+            mensaje_prueba_loguear(logger, rotulo, recibido);
+            free(rotulo);
+
+            coincide = mensaje_prueba_son_iguales(enviado, recibido);
+
+            if (!coincide) {
+                log_error(logger, "El eco de %s no coincide con lo enviado", nombre);
+            }
+
+            mensaje_prueba_destruir(recibido);
+        }
+    }
+
+    if (respuesta != NULL) eliminar_buffer(respuesta);
+    mensaje_prueba_destruir(enviado);
+
+    return coincide;
 }
