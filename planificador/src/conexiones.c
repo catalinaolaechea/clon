@@ -81,3 +81,33 @@ void inicializar_conexiones(void) {
     conexiones_planificador.fd_storage = conectar_o_abortar(  // y recien despues Storage
         config_planificador.ip_storage, config_planificador.puerto_storage, MODULO_STORAGE);
 }
+
+bool probar_round_trip(void) {
+
+    struct { int fd; pthread_mutex_t* mutex; t_modulo modulo; } destinos[] = {
+        { conexiones_planificador.fd_placa,   &conexiones_planificador.mutex_placa,   MODULO_PLACA   },
+        { conexiones_planificador.fd_storage, &conexiones_planificador.mutex_storage, MODULO_STORAGE }
+    };
+
+    // uno chico y uno grande por modulo: el grande es el que obliga al recv del otro lado a loopear
+    uint32_t tamanios[] = { PRUEBA_RELLENO_CHICO, PRUEBA_RELLENO_GRANDE };
+
+    uint32_t secuencia = 0;
+    bool todos_ok = true;
+
+    for (size_t d = 0; d < sizeof(destinos) / sizeof(destinos[0]); d++) {
+        for (size_t t = 0; t < sizeof(tamanios) / sizeof(tamanios[0]); t++) {
+
+            secuencia++;
+            bool ok = mensaje_prueba_round_trip(destinos[d].fd, destinos[d].mutex, planificador_logger,
+                                                MODULO_PLANIFICADOR, destinos[d].modulo, secuencia, tamanios[t]);
+
+            log_info(planificador_logger, "Round-trip con %s (relleno %u B): %s",
+                     modulo_to_string(destinos[d].modulo), tamanios[t], ok ? "OK" : "FALLO");
+
+            todos_ok = todos_ok && ok;
+        }
+    }
+
+    return todos_ok;
+}

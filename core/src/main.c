@@ -19,11 +19,7 @@ int main(int argc, char* argv[]) {
  
     conectar_a_planificador_y_placa();
 
-    t_paquete* paquete_prueba = crear_paquete(MENSAJE_PRUEBA);
-    enviar_paquete(fd_placa,paquete_prueba);
-
-    enviar_paquete(fd_planificador,paquete_prueba);
-    eliminar_paquete(paquete_prueba);
+    probar_round_trip();  // Check 1: ida y vuelta de un paquete con Planificador y Placa
 
     log_info(core_logger, "Core %d finalizando", identificador);
     liberar_conexion(&fd_planificador);

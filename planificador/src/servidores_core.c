@@ -66,9 +66,28 @@ static void desregistrar_core(int identificador, t_canal canal) {
 
 static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer* buffer) {
     switch (op_code) {
-        case MENSAJE_PRUEBA:
+        case MENSAJE_PRUEBA: {
             log_info(planificador_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %d", identificador);
+
+            t_mensaje_prueba* mensaje = mensaje_prueba_leer(buffer);
+
+            if (mensaje == NULL) {
+                log_error(planificador_logger, "MENSAJE_PRUEBA mal formado del Core %d", identificador);
+                break;
+            }
+
+            // el rotulo lleva el identificador porque con varios Cores los logs se intercalan
+            char* rotulo = string_from_format("MENSAJE_PRUEBA recibido del Core %d", identificador);
+            mensaje_prueba_loguear(planificador_logger, rotulo, mensaje);
+            free(rotulo);
+
+            if (mensaje_prueba_responder_eco(fd, mensaje) != CONEXION_OK) {  // los campos vuelven sin modificar
+                log_error(planificador_logger, "No se pudo responder el eco al Core %d", identificador);
+            }
+
+            mensaje_prueba_destruir(mensaje);
             break;
+        }
         default:
             log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
     }

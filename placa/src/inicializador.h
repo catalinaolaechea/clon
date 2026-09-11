@@ -9,6 +9,7 @@
 #include <utils/log.h>
 #include <pthread.h>
 #include <utils/handshake.h>
+#include <utils/mensaje_prueba.h>
 
 //consola
 #include <readline/readline.h>
