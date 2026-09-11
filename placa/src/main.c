@@ -184,16 +184,36 @@ void* atender_core(void* args){
             break;
         }
 
+        // todo mensaje viaja como [op_code][tamanio][payload], asi que hay que consumir el payload
+        // si o si, aunque el case todavia no lo use: si queda en el socket, la proxima vuelta lee el
+        // primer byte del tamanio creyendo que es un op_code y el protocolo se desincroniza
+        t_buffer* payload;
+        codigo_validacion = recibir_buffer(socket_cliente, &payload);
+
+        if (codigo_validacion != CONEXION_OK) {
+            log_error(placa_logger, "Error al recibir el payload del op_code %d del CORE %d", operacion_core, core->id_core);
+            break;
+        }
 
         switch (operacion_core)
         {
         case MENSAJE_PRUEBA:{
             log_info(placa_logger, "Recibido MENSAJE_PRUEBA del Core con identificador: %d", core->id_core);
-            
-            //t_paquete* eco = crear_paquete(MENSAJE_PRUEBA_ECO);
-            //enviar_paquete(core->socket_core,eco);
-            //eliminar_paquete(eco);
-            
+
+            t_mensaje_prueba* mensaje = mensaje_prueba_leer(payload);
+
+            if (mensaje == NULL) {
+                log_error(placa_logger, "MENSAJE_PRUEBA mal formado del Core %d", core->id_core);
+                break;
+            }
+
+            mensaje_prueba_loguear(placa_logger, "MENSAJE_PRUEBA recibido del Core", mensaje);
+
+            if (mensaje_prueba_responder_eco(socket_cliente, mensaje) != CONEXION_OK) {
+                log_error(placa_logger, "No se pudo responder el eco al Core %d", core->id_core);
+            }
+
+            mensaje_prueba_destruir(mensaje);
             break;
 
         }
@@ -241,7 +261,9 @@ void* atender_core(void* args){
             break;
 
         }
-    
+
+        eliminar_buffer(payload);
+
     }
 
     // saco al core de la lista y libero, UNA sola vez, acá afuera del while
@@ -276,11 +298,34 @@ void* atender_planificador(void* planificador){
             break;
         }
 
+        // mismo motivo que en atender_core: el payload se consume siempre, lo use o no el case
+        t_buffer* payload;
+        codigo_validacion = recibir_buffer(socket_cliente, &payload);
+
+        if (codigo_validacion != CONEXION_OK) {
+            log_error(placa_logger, "Error al recibir el payload del op_code %d del PLANIFICADOR", operacion_planificador);
+            break;
+        }
 
         switch (operacion_planificador)
         {
         case MENSAJE_PRUEBA:{
             log_info(placa_logger, "Recibido MENSAJE_PRUEBA del Planificador");
+
+            t_mensaje_prueba* mensaje = mensaje_prueba_leer(payload);
+
+            if (mensaje == NULL) {
+                log_error(placa_logger, "MENSAJE_PRUEBA mal formado del Planificador");
+                break;
+            }
+
+            mensaje_prueba_loguear(placa_logger, "MENSAJE_PRUEBA recibido del Planificador", mensaje);
+
+            if (mensaje_prueba_responder_eco(socket_cliente, mensaje) != CONEXION_OK) {
+                log_error(placa_logger, "No se pudo responder el eco al Planificador");
+            }
+
+            mensaje_prueba_destruir(mensaje);
             break;
 
         }
@@ -321,7 +366,8 @@ void* atender_planificador(void* planificador){
 
         }
 
-    
+        eliminar_buffer(payload);
+
     }
 
     liberar_conexion(&socket_cliente);
