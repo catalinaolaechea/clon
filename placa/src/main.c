@@ -321,7 +321,11 @@ void* atender_planificador(void* planificador){
 
             mensaje_prueba_loguear(placa_logger, "MENSAJE_PRUEBA recibido del Planificador", mensaje);
 
-            if (mensaje_prueba_responder_eco(socket_cliente, mensaje) != CONEXION_OK) {
+            t_paquete* eco = mensaje_prueba_empaquetar(mensaje, MENSAJE_PRUEBA_ECO);
+            int resultado = enviar_paquete(socket_cliente, eco);
+            eliminar_paquete(eco);
+
+            if (resultado != CONEXION_OK) {
                 log_error(placa_logger, "No se pudo responder el eco al Planificador");
             }
 
