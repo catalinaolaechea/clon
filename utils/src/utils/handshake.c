@@ -91,7 +91,7 @@ int enviar_handshake(int fd, t_modulo modulo, t_canal canal, int identificador) 
     buffer_add_uint8(paquete->buffer, canal);
 
     if (requiere_identificador(modulo)) {
-        buffer_add_uint8(paquete->buffer, identificador);
+        buffer_add_uint32(paquete->buffer, identificador);
     }
 
     return enviar_handshake_y_esperar_respuesta(fd, paquete);
@@ -155,7 +155,7 @@ int recibir_handshake(int fd, t_modulo servidor, t_modulo* cliente, t_canal* can
     *identificador = 0;   // los modulos unicos no mandan identificador
 
     if (requiere_identificador(*cliente)) {
-        *identificador = buffer_read_int(buffer);
+        *identificador = buffer_read_uint32(buffer);
     }
 
     eliminar_buffer(buffer);
