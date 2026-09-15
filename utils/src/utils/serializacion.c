@@ -199,12 +199,6 @@ uint8_t buffer_read_uint8(t_buffer* buffer) {
     return valor;
 }
 
-int buffer_read_int(t_buffer* buffer) {
-    int valor;
-    buffer_read(buffer, &valor, sizeof(int));
-    return valor;
-}
-
 char* buffer_read_string(t_buffer* buffer) {
     uint32_t longitud = buffer_read_uint32(buffer);
     char* str = malloc(longitud);

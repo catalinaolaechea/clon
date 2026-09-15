@@ -40,7 +40,6 @@ void buffer_add       (t_buffer* buffer, void* data, uint32_t size);
 
 uint32_t buffer_read_uint32(t_buffer* buffer);
 uint8_t  buffer_read_uint8 (t_buffer* buffer);
-int buffer_read_int(t_buffer* buffer);
 char*    buffer_read_string(t_buffer* buffer);   // malloc: libera el llamador
 void     buffer_read       (t_buffer* buffer, void* dest, uint32_t size);
 
