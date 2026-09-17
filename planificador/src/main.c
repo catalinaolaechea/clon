@@ -1,6 +1,7 @@
 #include "inicializador.h"
 #include "conexiones.h"
 #include "servidores_core.h"
+#include "estados.h"
 
 int main(int argc, char* argv[]) {
     
@@ -19,9 +20,14 @@ int main(int argc, char* argv[]) {
 
     probar_round_trip();  // Check 1: ida y vuelta de un paquete con Placa y Storage
 
+    inicializar_estados();  // Check 2: inicializa las colas de estados y el mutex
+
     pthread_t hilo_servidor = iniciar_servidor_cores();
+
     pthread_join(hilo_servidor, NULL);
+
     log_destroy(planificador_logger);
+    destruir_estados(); 
     config_destroy(planificador_config);
 
     return EXIT_SUCCESS;
