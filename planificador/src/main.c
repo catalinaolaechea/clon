@@ -26,8 +26,8 @@ int main(int argc, char* argv[]) {
 
     pthread_join(hilo_servidor, NULL);
 
-    log_destroy(planificador_logger);
     destruir_estados(); 
+    log_destroy(planificador_logger);
     config_destroy(planificador_config);
 
     return EXIT_SUCCESS;
