@@ -33,7 +33,7 @@ typedef struct {
     char* archivo_pseudocodigo;
     //Ejecucion
     t_contexto contexto;
-    char* core_asignado;
+    int core_asignado;
     //Planificacion
     double estimacion_rafaga;
     t_temporal* espera_en_ready; // Tiempo de espera en ready para calcular el tiempo de espera, es para HRRN (w + s) / s
@@ -45,5 +45,7 @@ typedef struct {
 } t_pcb;
 
 char* estado_to_string(t_estado estado);
+t_pcb* pcb_crear(uint32_t jid, char* archivo_pseudocodigo);
+void pcb_destruir(t_pcb* pcb);
 
 #endif
