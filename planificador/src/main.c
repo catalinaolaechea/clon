@@ -2,6 +2,7 @@
 #include "conexiones.h"
 #include "servidores_core.h"
 #include "estados.h"
+#include "jobs.h"
 
 int main(int argc, char* argv[]) {
     
@@ -21,6 +22,8 @@ int main(int argc, char* argv[]) {
     probar_round_trip();  // Check 1: ida y vuelta de un paquete con Placa y Storage
 
     inicializar_estados();  // Check 2: inicializa las colas de estados y el mutex
+
+    crear_job(path_job_inicial);
 
     pthread_t hilo_servidor = iniciar_servidor_cores();
 
