@@ -2,6 +2,7 @@
 #include "inicializador.h"
 #include "estados.h"
 #include <pthread.h>
+#include "largo_plazo.h"
 
 static pthread_mutex_t mutex_jid = PTHREAD_MUTEX_INITIALIZER;
 static uint32_t jid_siguiente = 0;
@@ -23,5 +24,7 @@ uint32_t crear_job(char* archivo_pseudocodigo) {
     log_info(planificador_logger, LOG_CREACION_JOB, jid);
 
     encolar_pcb(pcb);
+
+    largo_plazo_avisar_job_nuevo();
     return jid;
 }
