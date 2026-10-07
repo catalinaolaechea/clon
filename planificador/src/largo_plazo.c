@@ -69,3 +69,7 @@ void iniciar_largo_plazo(void) {
 
     pthread_detach(hilo_largo_plazo);  // no termina nunca: nadie le hace join
 }
+
+void largo_plazo_liberar_lugar() {
+    sem_post(&sem_grado_multiprogramacion);
+}
