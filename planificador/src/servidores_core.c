@@ -1,5 +1,6 @@
 #include "servidores_core.h"
 #include "inicializador.h"
+#include "corto_plazo.h"
 
 t_list* cores_conectados;
 pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
@@ -35,9 +36,16 @@ static void registrar_core(int identificador, t_canal canal, int fd) {
         core->fd_interrupt = fd;
     }
 
+    // con este registro el Core quedo con los dos canales: ya se le puede despachar
+    bool core_listo = core->libre && core->fd_dispatch != -1 && core->fd_interrupt != -1;
+
     int size_cores = list_size(cores_conectados);
     pthread_mutex_unlock(&mutex_cores);
     log_info(planificador_logger, "Cores conectados post registro: %d", size_cores);
+
+    if (core_listo) {
+        corto_plazo_avisar_core_libre();
+    }
 }
 
 static void desregistrar_core(int identificador, t_canal canal) {
