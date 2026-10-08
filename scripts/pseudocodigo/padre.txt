@@ -1,0 +1,3 @@
+INIT_JOB contador.txt
+INIT_JOB corto.txt
+EXIT
