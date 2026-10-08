@@ -55,12 +55,20 @@ typedef enum {
     RESPUESTA_MARCO       = 43,
     PAGE_FAULT            = 44,
     DESLOCKEAR_PAGINAS    = 49,
+    FETCH_ERROR           = 50,
+
 
     // --- 70-99: Planificador <-> Placa (Check 3) ---
     CREAR_JOB           = 70,
     FINALIZAR_JOB       = 71,
     CARGAR_PAGINA       = 76
 } t_op_code;
+
+
+typedef enum {
+    FETCH_ERROR_PC_FUERA_DE_RANGO = 0,
+    FETCH_ERROR_JID_INEXISTENTE   = 1
+} t_fetch_error;
 
 // Motivo por el que el Core devuelve un Job al Planificador.
 typedef enum {
