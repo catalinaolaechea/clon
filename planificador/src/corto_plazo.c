@@ -1,5 +1,6 @@
 #include "corto_plazo.h"
 #include <semaphore.h>
+#include <pthread.h>
 #include "inicializador.h"
 #include "estados.h"
 #include "pcb.h"
@@ -59,6 +60,44 @@ static void despachar_job(t_pcb* pcb, t_core_conectado* core) {
     }
 
     loguear_contexto_enviado(pcb, core->identificador);
+}
+
+static void* planificar_corto_plazo(void* arg) {
+    (void) arg;  // firma exigida por pthread_create, no se usa
+
+    while (1) {
+        sem_wait(&sem_jobs_en_ready);
+        sem_wait(&sem_cores_libres);
+
+        t_pcb* pcb = elegir_job();
+        if (pcb == NULL) {
+            log_error(planificador_logger, "Error, no hay Jobs en READY");
+            sem_post(&sem_cores_libres);  // devolver el Core: no se despacho a nadie
+            continue;
+        }
+
+        t_core_conectado core;
+        if (!tomar_core_libre(pcb->jid, &core)) {
+            // el aviso era de un Core que ya se desconecto: el Job sigue primero en READY
+            sem_post(&sem_jobs_en_ready);
+            continue;
+        }
+
+        despachar_job(pcb, &core);
+    }
+
+    return NULL;
+}
+
+void iniciar_corto_plazo(void) {
+    pthread_t hilo_corto_plazo;
+    int resultado = pthread_create(&hilo_corto_plazo, NULL, planificar_corto_plazo, NULL);
+    if (resultado != 0) {
+        log_error(planificador_logger, "Error al crear el hilo de corto plazo: %s", strerror(resultado));
+        exit(EXIT_FAILURE);
+    }
+
+    pthread_detach(hilo_corto_plazo);  // no termina nunca: nadie le hace join
 }
 
 void inicializar_corto_plazo(void) {

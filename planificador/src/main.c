@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     crear_job(path_job_inicial);
 
     iniciar_largo_plazo();
+    iniciar_corto_plazo();
 
     pthread_t hilo_servidor = iniciar_servidor_cores();
 
