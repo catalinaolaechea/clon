@@ -3,6 +3,7 @@
  
 #include "inicializador.h"
 #include "conexiones.h"
+#include "instrucciones.h"
  
 // Log obligatorio del Fetch: "## JID: <JID> - FETCH - Program Counter: <PROGRAM_COUNTER>"
 #define LOG_FETCH "## JID: %u - FETCH - Program Counter: %u"
