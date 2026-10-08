@@ -5,6 +5,7 @@
 #include "estados.h"
 #include "pcb.h"
 #include "cliente_placa.h"
+#include "corto_plazo.h"
 
 #define ERROR_SEM_INIT -1
 
@@ -31,6 +32,7 @@ static void* planificar_largo_plazo(void* arg) {
         }
 
         cambiar_estado(pcb, ESTADO_READY);
+        corto_plazo_avisar_job_ready();
     }
 }
 
