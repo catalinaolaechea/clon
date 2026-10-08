@@ -24,6 +24,8 @@ static void registrar_core(int identificador, t_canal canal, int fd) {
         core->identificador = identificador;
         core->fd_dispatch = -1;
         core->fd_interrupt = -1;
+        core->libre = true;
+        core->jid = 0;
         list_add(cores_conectados, core);
     }
 
@@ -62,6 +64,26 @@ static void desregistrar_core(int identificador, t_canal canal) {
     int size_cores = list_size(cores_conectados);
     pthread_mutex_unlock(&mutex_cores);
     log_info(planificador_logger, "Cores conectados post desregistro: %d", size_cores);
+}
+
+bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
+    pthread_mutex_lock(&mutex_cores);
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+
+        // sin el canal interrupt el Core no esta listo: todavia puede estar en el round-trip
+        if (core->libre && core->fd_dispatch != -1 && core->fd_interrupt != -1) {
+            core->libre = false;
+            core->jid = jid;
+            *core_tomado = *core;
+            pthread_mutex_unlock(&mutex_cores);
+            return true;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+    return false;
 }
 
 static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer* buffer) {
