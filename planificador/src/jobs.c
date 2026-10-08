@@ -32,6 +32,5 @@ uint32_t crear_job(char* archivo_pseudocodigo) {
 void finalizar_job(t_pcb* pcb) {
     cambiar_estado(pcb, ESTADO_EXIT);
 
-    // TODO(SIS-54): avisar a la Placa (FINALIZAR_JOB), log con las 7 estadisticas,
-    // liberar la PCB y el lugar de multiprogramacion (largo_plazo_liberar_lugar).
+    largo_plazo_liberar_lugar();
 }
