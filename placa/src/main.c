@@ -220,9 +220,50 @@ void* atender_core(void* args){
         }
         case FETCH_INSTRUCCION:{
             
-            log_info(placa_logger, "## JID: #id# - Obtener instrucción: #pc# - Instrucción ");
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t pc = buffer_read_uint32(payload);
 
+            char* instruccion = NULL;
+            int motivo_error = -1;
 
+            pthread_mutex_lock(&mutex_jobs);
+
+                t_job_placa* job = buscar_job(jid);
+
+                if(job == NULL){
+                    motivo_error = FETCH_ERROR_JID_INEXISTENTE;
+                } else if (pc >= job->cant_instrucciones){
+                    motivo_error = FETCH_ERROR_PC_FUERA_DE_RANGO;
+                } else {
+                    instruccion = strdup(job->instrucciones[pc]);
+                }
+
+            pthread_mutex_unlock(&mutex_jobs);
+
+            usleep(RETARDO_MEMORIA*1000);
+
+            t_paquete* respuesta;
+
+            if(instruccion != NULL){
+                log_info(placa_logger, "## JID: %u - Obtener instrucción: %u - Instrucción: %s", jid,pc,instruccion);
+                respuesta = crear_paquete(RESPUESTA_INSTRUCCION);
+                buffer_add_string(respuesta->buffer, instruccion);
+                free(instruccion);
+            }else {
+                log_error(placa_logger, "Fetch inválido - JID: %u - PC: %u - Motivo: %d", jid, pc, motivo_error);
+
+                respuesta = crear_paquete(FETCH_ERROR);
+                buffer_add_uint32(respuesta->buffer, motivo_error);
+
+            }
+
+            int validacion = enviar_paquete(socket_cliente, respuesta);
+
+            if(validacion != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder el fetch al core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
             break;
 
         }
@@ -412,13 +453,13 @@ t_job_placa* buscar_job(uint32_t jid_buscado){
 
     bool el_jid(void* elemento){
         t_job_placa* job = (t_job_placa*) elemento;
-        return job->jib == jib_buscado;
+        return job->jib == jid_buscado;
     }
 
     t_job_placa* resultado =list_find(lista_jobs,el_jid);
 
     if(resultado == NULL){
-        log_error(memory_logger, "No se encontro el JOB con el JID %u",jid_buscado);
+        log_error(plaga_logger, "No se encontro el JOB con el JID %u",jid_buscado);
         return NULL;
     }
 
@@ -468,7 +509,7 @@ t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad){
 }
 
 t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo){
-    char* path = armar_path_instrucciones(nombre_archivo);
+    char* path = string_from_format("%s/%s",PATH_INSTRUCCIONES ,nombre_archivo);
 
     uint32_t cantidad;
     char** instrucciones = leer_instrucciones(path,&cantidad);
