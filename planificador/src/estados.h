@@ -16,5 +16,6 @@ void destruir_estados(void);
 void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente);
 void encolar_pcb(t_pcb* pcb);
 t_pcb* primer_pcb_de_cola(t_estado estado);
+t_pcb* buscar_pcb_en_cola(t_estado estado, uint32_t jid);  // NULL si no esta en esa cola
 
 #endif
