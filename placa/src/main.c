@@ -61,12 +61,71 @@ void procesar_comando(char* linea){
         comando_info();
     }else if(strcmp(args[0],"TLS") ==0){
         comando_tls();
-    }else {
+    }
+
+    else if(strcmp(args[0], "CREAR") == 0){
+        comando_crear(args);
+    }else if(strcmp(args[0], "FINALIZAR") == 0){
+        comando_finalizar(args);
+    }else if(strcmp(args[0], "FETCH") == 0){
+        comando_fetch(args);
+    }  
+
+    else {
         printf("Comando desconocido: %s\n",args[0]);
     }
 
     string_array_destroy(args);
 }
+
+// Luego borrar
+
+void comando_crear(char** args){
+    if (string_array_size(args) != 3) {
+        printf("Uso: CREAR <jid> <archivo>\n");
+        return;
+    }
+
+    uint32_t jid = strtoul(args[1], NULL, 10);
+    t_job_placa* job = inicializar_job(jid, args[2]);
+
+    if (job != NULL)
+        printf("Job %u creado con %u instrucciones\n", jid, job->cant_instrucciones);
+    else
+        printf("No se pudo crear el Job %u\n", jid);
+}
+
+void comando_fetch(char** args){
+    if (string_array_size(args) != 3) {
+        printf("Uso: FETCH <jid> <pc>\n");
+        return;
+    }
+
+    uint32_t jid = strtoul(args[1], NULL, 10);
+    uint32_t pc  = strtoul(args[2], NULL, 10);
+
+    pthread_mutex_lock(&mutex_jobs);
+        t_job_placa* job = buscar_job(jid);
+
+        if (job == NULL)
+            printf("JID %u inexistente\n", jid);
+        else if (pc >= job->cant_instrucciones)
+            printf("PC %u fuera de rango (el Job tiene %u instrucciones)\n", pc, job->cant_instrucciones);
+        else
+            printf("JID %u - PC %u: %s\n", jid, pc, job->instrucciones[pc]);
+    pthread_mutex_unlock(&mutex_jobs);
+}
+
+void comando_finalizar(char** args){
+    if (string_array_size(args) != 2) {
+        printf("Uso: FINALIZAR <jid>\n");
+        return;
+    }
+
+    finalizar_job(strtoul(args[1], NULL, 10));
+}
+
+//
 
 void comando_info(){
     pthread_mutex_lock(&mutex_lista_core);
@@ -240,7 +299,7 @@ void* atender_core(void* args){
 
             pthread_mutex_unlock(&mutex_jobs);
 
-            usleep(RETARDO_MEMORIA*1000);
+            retardo_memoria();
 
             t_paquete* respuesta;
 
@@ -377,8 +436,7 @@ void* atender_planificador(void* planificador){
 
         }
         case CREAR_JOB:{
-
-            //falta id
+            
             uint32_t jid = buffer_read_uint32(payload);
             char* archivo = buffer_read_string(payload);
 
@@ -388,14 +446,14 @@ void* atender_planificador(void* planificador){
 
             t_paquete* respuesta;
             if(job != NULL){
-                log_info(placa_logger, "## JID %u - Job Creado ",jid);
+                log_info(placa_logger, "## JID: %u - Job Creado",jid);
                 respuesta = crear_paquete(CREAR_JOB_OK);
 
             }else {
                 respuesta = crear_paquete(CREAR_JOB_ERROR);
             }
 
-            usleep(RETARDO_MEMORIA*1000);
+            retardo_memoria();
 
             if(enviar_paquete(socket_cliente, respuesta) != CONEXION_OK){
                 log_error(placa_logger, "No se pudo responder CREAR_JOB al Planificador");
@@ -421,8 +479,21 @@ void* atender_planificador(void* planificador){
 
         case FINALIZAR_JOB:{
             
+            uint32_t jid = buffer_read_uint32(payload);
 
+            finalizar_job(jid);
             
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(FINALIZAR_JOB_OK);
+            int validar = enviar_paquete(socket_cliente, respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder FINALIZAR_JOB al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
+
             break;
             
         }
@@ -433,11 +504,9 @@ void* atender_planificador(void* planificador){
         default:
             log_warning(placa_logger, "Operación desconocida recibida del PLANIFICADOR: %d", operacion_planificador);
             break;
-
         }
 
         eliminar_buffer(payload);
-
     }
 
     liberar_conexion(&socket_cliente);
@@ -446,22 +515,19 @@ void* atender_planificador(void* planificador){
     
 }
 
+void retardo_memoria(){
+    usleep(RETARDO_MEMORIA*1000);
+}
 
-//pllanificador
 
 t_job_placa* buscar_job(uint32_t jid_buscado){
 
     bool el_jid(void* elemento){
         t_job_placa* job = (t_job_placa*) elemento;
-        return job->jib == jid_buscado;
+        return job->jid == jid_buscado;
     }
 
     t_job_placa* resultado =list_find(lista_jobs,el_jid);
-
-    if(resultado == NULL){
-        log_error(plaga_logger, "No se encontro el JOB con el JID %u",jid_buscado);
-        return NULL;
-    }
 
     return resultado;
 
@@ -509,7 +575,7 @@ t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad){
 }
 
 t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo){
-    char* path = string_from_format("%s/%s",PATH_INSTRUCCIONES ,nombre_archivo);
+    char* path = string_from_format("%s%s",PATH_INSTRUCCIONES ,nombre_archivo);
 
     uint32_t cantidad;
     char** instrucciones = leer_instrucciones(path,&cantidad);
@@ -529,5 +595,36 @@ t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo){
     pthread_mutex_unlock(&mutex_jobs);
 
     return job;
+
+}
+
+t_job_placa* quitar_job(uint32_t jid_buscado){
+
+    bool el_jid(void* elemento){
+        
+        t_job_placa* job = (t_job_placa*) elemento;
+
+        return job->jid == jid_buscado; 
+    }
+
+    return list_remove_by_condition(lista_jobs,el_jid);
+
+}
+
+void finalizar_job(uint32_t jid){
+
+    pthread_mutex_lock(&mutex_jobs);
+        t_job_placa* job = quitar_job(jid);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(job == NULL){
+        log_warning(placa_logger,"FINALIZAR_JOB de un JID inexistente: %u ", jid);
+        return;
+    }
+
+    string_array_destroy(job->instrucciones);
+    free(job);
+
+    log_debug(placa_logger, "## JID: %u - Job Finalizado", jid);
 
 }

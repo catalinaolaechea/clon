@@ -69,5 +69,15 @@ t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo);
 t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad);
 char** leer_instrucciones(char* path, uint32_t* cantidad);
 t_job_placa* buscar_job(uint32_t jid);
+t_job_placa* quitar_job(uint32_t jid);
+void finalizar_job(uint32_t jid);
+
+void retardo_memoria();
+
+
+//
+void comando_crear(char** args);
+void comando_finalizar(char** args);
+void comando_fetch(char** args);
 
 #endif
