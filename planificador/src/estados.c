@@ -56,3 +56,15 @@ void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente) {
 
     log_info(planificador_logger, LOG_CAMBIO_ESTADO, pcb->jid, estado_to_string(estado_anterior), estado_to_string(estado_siguiente));
 }
+
+t_pcb* primer_pcb_de_cola(t_estado estado) {
+    t_pcb* pcb = NULL;
+    pthread_mutex_lock(&mutex_estados);
+
+    if (list_size(colas_estados[estado]) > 0) {
+        pcb = list_get(colas_estados[estado], 0);
+    }
+
+    pthread_mutex_unlock(&mutex_estados);
+    return pcb;
+}
