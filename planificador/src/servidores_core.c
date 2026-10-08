@@ -1,6 +1,7 @@
 #include "servidores_core.h"
 #include "inicializador.h"
 #include "corto_plazo.h"
+#include "devolucion.h"
 
 t_list* cores_conectados;
 pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
@@ -94,6 +95,30 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
     return false;
 }
 
+bool liberar_core(int identificador, uint32_t jid) {
+    pthread_mutex_lock(&mutex_cores);
+
+    bool liberado = false;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (core->identificador == identificador) {
+            if (!core->libre && core->jid == jid) {
+                core->libre = true;
+                liberado = true;
+            }
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+
+    if (liberado) {
+        corto_plazo_avisar_core_libre();
+    }
+    return liberado;
+}
+
 static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer* buffer) {
     switch (op_code) {
         case MENSAJE_PRUEBA: {
@@ -118,6 +143,9 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
             mensaje_prueba_destruir(mensaje);
             break;
         }
+        case DEVOLUCION_JOB:
+            recibir_devolucion(identificador, buffer);
+            break;
         default:
             log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
     }

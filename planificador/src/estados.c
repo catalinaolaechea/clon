@@ -68,3 +68,19 @@ t_pcb* primer_pcb_de_cola(t_estado estado) {
     pthread_mutex_unlock(&mutex_estados);
     return pcb;
 }
+
+t_pcb* buscar_pcb_en_cola(t_estado estado, uint32_t jid) {
+    t_pcb* encontrado = NULL;
+    pthread_mutex_lock(&mutex_estados);
+
+    for (int i = 0; i < list_size(colas_estados[estado]); i++) {
+        t_pcb* pcb = list_get(colas_estados[estado], i);
+        if (pcb->jid == jid) {
+            encontrado = pcb;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_estados);
+    return encontrado;
+}

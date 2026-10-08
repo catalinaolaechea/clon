@@ -27,4 +27,8 @@ pthread_t iniciar_servidor_cores(void);
 // una copia (el original lo puede liberar desregistrar_core). false si no hay ninguno.
 bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado);
 
+// Marca libre al Core y avisa al corto plazo, solo si tenia asignado ese 'jid'.
+// false si el Core no existe o ejecutaba otro Job.
+bool liberar_core(int identificador, uint32_t jid);
+
 #endif
