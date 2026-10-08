@@ -18,9 +18,13 @@ int main(int argc, char* argv[]) {
     log_info(core_logger, "Core %d inicializado. Planificador=%s:%s - Placa=%s:%s", identificador, configuracion.ip_planificador, configuracion.puerto_planificador, configuracion.ip_placa, configuracion.puerto_placa);
 
     conectar_a_planificador_y_placa();
-    conectar_canal_interrupt();   // COR-03: segundo socket a Planificador, para interrupciones
 
     probar_round_trip();  // Check 1: ida y vuelta de un paquete con Planificador y Placa
+
+    // COR-03: segundo socket a Planificador, para interrupciones. Va despues del round-trip:
+    // con los dos canales registrados el Planificador ya puede despachar, y un DISPATCH_JOB
+    // en medio del round-trip se leeria como el eco.
+    conectar_canal_interrupt();
 
     esperar_dispatch();
 
