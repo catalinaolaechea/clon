@@ -26,6 +26,7 @@ static void registrar_core(int identificador, t_canal canal, int fd) {
         core->identificador = identificador;
         core->fd_dispatch = -1;
         core->fd_interrupt = -1;
+        core->numero_despacho = 0;
         core->libre = true;
         core->jid = 0;
         list_add(cores_conectados, core);
@@ -85,6 +86,7 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
         if (core->libre && core->fd_dispatch != -1 && core->fd_interrupt != -1) {
             core->libre = false;
             core->jid = jid;
+            core->numero_despacho++;
             *core_tomado = *core;
             pthread_mutex_unlock(&mutex_cores);
             return true;

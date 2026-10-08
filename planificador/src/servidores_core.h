@@ -12,6 +12,7 @@
 
 typedef struct {
     int identificador;   // el que mandó el Core en el handshake
+    uint32_t numero_despacho; // Sube en cada despacho, identifica quantum vig
     int   fd_dispatch;     // -1 mientras no se conectó ese canal
     int   fd_interrupt;
     bool  libre;           // sin Job asignado
