@@ -59,7 +59,11 @@ typedef enum {
     // --- 70-99: Planificador <-> Placa (Check 3) ---
     CREAR_JOB           = 70,
     FINALIZAR_JOB       = 71,
-    CARGAR_PAGINA       = 76
+    CARGAR_PAGINA       = 76,
+    CREAR_JOB_OK = 81,
+    CREAR_JOB_ERROR = 82,
+    FINALIZAR_JOB_OK = 83
+
 } t_op_code;
 
 // Motivo por el que el Core devuelve un Job al Planificador.

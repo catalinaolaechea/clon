@@ -13,6 +13,7 @@ int main(int argc, char* argv[]) {
     inicializar_config();
 
     lista_core = list_create();
+    lista_jobs = list_create();
 
     int server_placa = iniciar_servidor(PUERTO_ESCUCHA);
 
@@ -221,6 +222,7 @@ void* atender_core(void* args){
             
             log_info(placa_logger, "## JID: #id# - Obtener instrucción: #pc# - Instrucción ");
 
+
             break;
 
         }
@@ -336,7 +338,30 @@ void* atender_planificador(void* planificador){
         case CREAR_JOB:{
 
             //falta id
-            log_info(placa_logger, "## JIB #id# - Job Creado ");
+            uint32_t jid = buffer_read_uint32(payload);
+            char* archivo = buffer_read_string(payload);
+
+            t_job_placa* job = inicializar_job(jid, archivo);
+            
+            free(archivo);
+
+            t_paquete* respuesta;
+            if(job != NULL){
+                log_info(placa_logger, "## JID %u - Job Creado ",jid);
+                respuesta = crear_paquete(CREAR_JOB_OK);
+
+            }else {
+                respuesta = crear_paquete(CREAR_JOB_ERROR);
+            }
+
+            usleep(RETARDO_MEMORIA*1000);
+
+            if(enviar_paquete(socket_cliente, respuesta) != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder CREAR_JOB al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
+
 
             break;
 
@@ -378,4 +403,90 @@ void* atender_planificador(void* planificador){
 
     return EXIT_SUCCESS;
     
+}
+
+
+//pllanificador
+
+t_job_placa* buscar_job(uint32_t jid_buscado){
+
+    bool el_jid(void* elemento){
+        t_job_placa* job = (t_job_placa*) elemento;
+        return job->jib == jib_buscado;
+    }
+
+    t_job_placa* resultado =list_find(lista_jobs,el_jid);
+
+    if(resultado == NULL){
+        log_error(memory_logger, "No se encontro el JOB con el JID %u",jid_buscado);
+        return NULL;
+    }
+
+    return resultado;
+
+}
+
+
+//Devuelve las lineas del archivo o null si no se pudo abrir
+char** leer_instrucciones(char* path, uint32_t* cantidad){
+
+    FILE* archivo = fopen(path, "r");
+
+    if(archivo ==NULL) return NULL;
+
+    char** instrucciones = string_array_new();
+    *cantidad = 0;
+
+    char* linea = NULL;
+    size_t capacidad = 0;
+
+    while(getline(&linea, &capacidad, archivo) != -1){
+
+        linea[strcspn(linea, "\r\n")] = '\0';
+
+        if(strlen(linea) == 0) continue;
+
+        string_array_push(&instrucciones,strdup(linea));
+        (*cantidad)++;
+
+    }
+
+    free(linea);
+    fclose(archivo);
+    return instrucciones;
+
+}
+
+t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad){
+    t_job_placa* job = malloc(sizeof(t_job_placa));
+    job->jid = jid;
+    job->instrucciones = instrucciones;
+    job->cant_instrucciones = cantidad;
+
+    return job;
+
+}
+
+t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo){
+    char* path = armar_path_instrucciones(nombre_archivo);
+
+    uint32_t cantidad;
+    char** instrucciones = leer_instrucciones(path,&cantidad);
+
+    if(instrucciones == NULL){
+        log_error(placa_logger, "No se pudo abrir el archivo de instrucciones: %s", path);
+        free(path);
+        return NULL;
+    }
+
+    free(path);
+
+    t_job_placa* job = crear_job(jid,instrucciones, cantidad);
+
+    pthread_mutex_lock(&mutex_jobs);
+        list_add(lista_jobs,job);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    return job;
+
 }

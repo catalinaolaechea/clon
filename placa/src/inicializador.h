@@ -33,15 +33,22 @@ extern int RETARDO_OFFLOAD;
 
 //variables globables
 extern t_list* lista_core;
+extern t_list* lista_jobs;
 
 //semaforos
 extern pthread_mutex_t mutex_lista_core;
-extern pthread_mutex_t  mutex_procesos;
+extern pthread_mutex_t mutex_jobs;
 
 typedef struct {
     int socket_core;
     int id_core;
 }t_core_placa;
+
+typedef struct {
+    uint32_t jid;
+    char** instrucciones;
+    uint32_t cant_instrucciones;
+} t_job_placa;
 
 void inicializar_log();
 void inicializar_config();
@@ -56,5 +63,11 @@ void* atender_consola(void* arg);
 void procesar_comando(char* linea);
 void comando_info();
 void comando_tls();
+
+//antender_planificador
+t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo);
+t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad);
+char** leer_instrucciones(char* path, uint32_t* cantidad);
+t_job_placa* buscar_job(uint32_t jid);
 
 #endif

@@ -17,11 +17,13 @@ char* PATH_OFFLOAD;
 int TAM_OFFLOAD;
 int RETARDO_OFFLOAD;
 
+
 t_list* lista_core = NULL;
+t_list* lista_jobs;
 
 //semaforos
 pthread_mutex_t mutex_lista_core = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_procesos = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_jobs = PTHREAD_MUTEX_INITIALIZER;
 
 
 void inicializar_log(){
