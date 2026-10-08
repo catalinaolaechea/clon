@@ -1,0 +1,4 @@
+NOOP
+SET BX 5
+SUB BX 2
+EXIT
