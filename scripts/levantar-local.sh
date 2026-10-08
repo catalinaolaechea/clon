@@ -4,13 +4,14 @@ set -uo pipefail
 
 # Levanta los 4 modulos en localhost: Placa y Storage -> Planificador -> 3 Cores.
 # La salida de cada proceso va a runtime/logs/<nombre>.out
+# Uso: ./scripts/levantar-local.sh [job_inicial]   (nombre relativo a PATH_INSTRUCCIONES de la Placa)
 
 cd "$(dirname "$0")/.."
 
 CONFIGS=configs/local
 LOGS=runtime/logs
 PIDS=runtime/local.pids   # lo usa bajar-local.sh
-JOB_INICIAL=scripts/pseudocodigo/prueba_minima
+JOB_INICIAL="${1:-prueba_minima}"   # solo el nombre: la Placa le antepone su PATH_INSTRUCCIONES
 ESPERA=1   # segundos entre etapas
 
 lanzar() {
