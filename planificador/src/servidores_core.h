@@ -12,6 +12,7 @@
 
 typedef struct {
     int identificador;   // el que mandó el Core en el handshake
+    uint32_t numero_despacho; // Sube en cada despacho, identifica quantum vig
     int   fd_dispatch;     // -1 mientras no se conectó ese canal
     int   fd_interrupt;
     bool  libre;           // sin Job asignado
@@ -30,5 +31,9 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado);
 // Marca libre al Core y avisa al corto plazo, solo si tenia asignado ese 'jid'.
 // false si el Core no existe o ejecutaba otro Job.
 bool liberar_core(int identificador, uint32_t jid);
+
+// Manda INTERRUPCION por el canal interrupt solo si el Core sigue con ese Job y ese despacho.
+// false si ya no corresponde (el Job volvió o se despachó otro) o si falló el envío.
+bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho);
 
 #endif

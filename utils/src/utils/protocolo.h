@@ -46,7 +46,7 @@ typedef enum {
     // --- 10-39: Planificador <-> Core (Check 2) ---
     DISPATCH_JOB        = 10,
     DEVOLUCION_JOB      = 11,
-    INTERRUPCION        = 12,
+    INTERRUPCION        = 12,  // { uint32 jid } por el canal interrupt
 
     // --- 40-69: Core <-> Placa (Check 3) ---
     FETCH_INSTRUCCION     = 40,

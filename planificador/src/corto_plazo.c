@@ -5,12 +5,11 @@
 #include "estados.h"
 #include "pcb.h"
 #include "servidores_core.h"
+#include "quantum.h"
 
 #define ERROR_SEM_INIT -1
 
 static sem_t sem_jobs_en_ready;
-// Puede quedar adelantado si un Core avisa y despues se desconecta: el despacho vuelve a
-// buscar el Core bajo el mutex antes de usarlo.
 static sem_t sem_cores_libres;
 
 static t_pcb* elegir_job_fifo(void) {
@@ -58,6 +57,12 @@ static void despachar_job(t_pcb* pcb, t_core_conectado* core) {
         corto_plazo_avisar_job_ready();
         return;
     }
+
+    if (config_planificador.algoritmo_planificacion == ALGORITMO_RR) {
+        iniciar_quantum(core->identificador, pcb->jid, core->numero_despacho);
+    }
+
+    log_info(planificador_logger, "Job %u despachado al Core %d", pcb->jid, core->identificador);
 
     loguear_contexto_enviado(pcb, core->identificador);
 }

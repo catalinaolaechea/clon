@@ -26,6 +26,7 @@ static void registrar_core(int identificador, t_canal canal, int fd) {
         core->identificador = identificador;
         core->fd_dispatch = -1;
         core->fd_interrupt = -1;
+        core->numero_despacho = 0;
         core->libre = true;
         core->jid = 0;
         list_add(cores_conectados, core);
@@ -85,6 +86,7 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
         if (core->libre && core->fd_dispatch != -1 && core->fd_interrupt != -1) {
             core->libre = false;
             core->jid = jid;
+            core->numero_despacho++;
             *core_tomado = *core;
             pthread_mutex_unlock(&mutex_cores);
             return true;
@@ -117,6 +119,35 @@ bool liberar_core(int identificador, uint32_t jid) {
         corto_plazo_avisar_core_libre();
     }
     return liberado;
+}
+
+bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho) {
+    pthread_mutex_lock(&mutex_cores);
+
+    bool enviado = false;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (core->identificador == identificador) {
+            if (!core->libre && core->jid == jid && core->numero_despacho == numero_despacho) {
+                t_paquete* paquete = crear_paquete(INTERRUPCION);
+                buffer_add_uint32(paquete->buffer, jid);
+                int resultado = enviar_paquete(core->fd_interrupt, paquete);
+                eliminar_paquete(paquete);
+
+                enviado = (resultado == CONEXION_OK);
+            }
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+    if (enviado) {
+        log_info(planificador_logger, "Fin de quantum del JID %u: interrupción enviada al Core %d", jid, identificador);
+    }
+
+    return enviado;
+
 }
 
 static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer* buffer) {

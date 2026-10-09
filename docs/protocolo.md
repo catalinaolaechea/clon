@@ -197,11 +197,17 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 |---|---|---|---|
 | `10` | `DISPATCH_JOB` | Planif → Core | ✔ `uint32 jid`, `contexto` (14 × `uint32`) |
 | `11` | `DEVOLUCION_JOB` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint8 motivo` |
-| `12` | `INTERRUPCION` | Planif → Core | ✔ vacío (canal interrupt) |
+| `12` | `INTERRUPCION` | Planif → Core | ✔ `uint32 jid` (canal **interrupt**) |
 | `20 – 29` | `SYSCALL_*` | Core → Planif | una por syscall, en el orden del enunciado |
 | `30 – 39` | respuestas de syscall | Planif → Core | — |
 
 `motivo` de la devolución: fin de quantum, page fault, syscall bloqueante, `EXIT`.
+
+**Por qué `INTERRUPCION` lleva el JID:** la interrupción viaja por otro socket y puede llegar tarde.
+Si el Job interrumpido ya hizo `EXIT` y el Core está ejecutando otro, el Core compara el JID con el del
+Job en curso y **descarta** la interrupción si no coincide. Sin el JID desalojaría a un Job que no
+cumplió su quantum. El Core solo la evalúa al final del ciclo (Check Interrupt), nunca en el medio de
+una instrucción.
 
 ### Core ↔ Placa (40 – 69)
 
@@ -214,17 +220,25 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 | `44` | `PAGE_FAULT` | Placa → Core | ✔ `uint32 jid`, `uint32 nro_pagina` |
 | `45 – 48` | lectura y escritura de memoria | Core ↔ Placa | — |
 | `49` | `DESLOCKEAR_PAGINAS` | Core → Placa | ✔ `uint32 jid` (deslockea **todas** las del Job) |
+| `50` | `FETCH_ERROR` | Placa → Core | ✔ `uint32 motivo`: `0` PC fuera de rango, `1` JID inexistente (`t_fetch_error`) |
 
 ### Planificador ↔ Placa (70 – 99)
 
 | op_code | Nombre | Sentido |
 |---|---|---|
 | `70` | `CREAR_JOB` | Planif → Placa (`uint32 jid`, `string archivo_pseudocodigo`) |
-| `71` | `FINALIZAR_JOB` | Planif → Placa |
+| `71` | `FINALIZAR_JOB` | Planif → Placa (`uint32 jid`) |
 | `72 – 75` | `ALLOC` / `FREE` y sus respuestas | Planif ↔ Placa |
 | `76` | `CARGAR_PAGINA` | Planif → Placa (resolución del page fault) |
 | `77 – 79` | lectura y escritura de memoria del Job | Planif ↔ Placa |
 | `80` | `DESLOCKEAR_PAGINAS` | Planif → Placa (fin de syscall de memoria) |
+| `81` | `CREAR_JOB_OK` | Placa → Planif (vacío) |
+| `82` | `CREAR_JOB_ERROR` | Placa → Planif (vacío; p. ej. el archivo no existe en `PATH_INSTRUCCIONES`) |
+| `83` | `FINALIZAR_JOB_OK` | Placa → Planif (vacío) |
+
+`CREAR_JOB` y `FINALIZAR_JOB` son **pedido-respuesta**: el Planificador mantiene tomado el mutex del
+socket de la Placa hasta leer la respuesta completa, incluido el payload vacío. `archivo_pseudocodigo`
+es **solo el nombre**, relativo al `PATH_INSTRUCCIONES` de la Placa.
 
 ### Planificador ↔ Storage (100 – 129)
 
@@ -273,3 +287,4 @@ de mergear, porque del otro lado hay alguien leyendo esos campos en ese orden.
 | Fecha | Cambio |
 |---|---|
 | 2026-08-27 | Versión inicial. Header, tipos, handshake y mensajes del Check 1 definidos; rangos y op_codes de checks 2–4 reservados |
+| 2026-10-08 | **Cambia `INTERRUPCION`: de vacío a `uint32 jid`** (SIS-50 / SIS-48). Se documentan `FETCH_ERROR` (50), `CREAR_JOB_OK` / `CREAR_JOB_ERROR` / `FINALIZAR_JOB_OK` (81–83) y el payload de `FINALIZAR_JOB`, que ya estaban en el código |
