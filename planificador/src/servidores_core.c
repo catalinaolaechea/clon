@@ -143,7 +143,7 @@ bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho)
 
     pthread_mutex_unlock(&mutex_cores);
     if (enviado) {
-        log_info(planificador_logger, "Fin de quantum del JID %u: interrupción enviada al Core %d", identificador, jid);
+        log_info(planificador_logger, "Fin de quantum del JID %u: interrupción enviada al Core %d", jid, identificador);
     }
 
     return enviado;
