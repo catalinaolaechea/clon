@@ -32,4 +32,8 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado);
 // false si el Core no existe o ejecutaba otro Job.
 bool liberar_core(int identificador, uint32_t jid);
 
+// Manda INTERRUPCION por el canal interrupt solo si el Core sigue con ese Job y ese despacho.
+// false si ya no corresponde (el Job volvió o se despachó otro) o si falló el envío.
+bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho);
+
 #endif

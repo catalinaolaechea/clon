@@ -121,6 +121,35 @@ bool liberar_core(int identificador, uint32_t jid) {
     return liberado;
 }
 
+bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho) {
+    pthread_mutex_lock(&mutex_cores);
+
+    bool enviado = false;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (core->identificador == identificador) {
+            if (!core->libre && core->jid == jid && core->numero_despacho == numero_despacho) {
+                t_paquete* paquete = crear_paquete(INTERRUPCION);
+                buffer_add_uint32(paquete->buffer, jid);
+                int resultado = enviar_paquete(core->fd_interrupt, paquete);
+                eliminar_paquete(paquete);
+
+                enviado = (resultado == CONEXION_OK);
+            }
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+    if (enviado) {
+        log_info(planificador_logger, "Fin de quantum del JID %u: interrupción enviada al Core %d", identificador, jid);
+    }
+
+    return enviado;
+
+}
+
 static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer* buffer) {
     switch (op_code) {
         case MENSAJE_PRUEBA: {
