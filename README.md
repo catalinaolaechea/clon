@@ -34,6 +34,19 @@ Los N Cores son N procesos del **mismo** binario, con configs e identificadores
 distintos. En una sola máquina los tres servidores no pueden compartir puerto: la
 convención del grupo es **planificador 8080, placa 8081, storage 8082**.
 
+### Correr las pruebas de la cátedra
+
+Desde la raíz del repo, `make` levanta los módulos con las pruebas de
+[entrenados-pruebas](https://github.com/sisoputnfrba/entrenados-pruebas), en una PC o en varias:
+
+```bash
+make prueba fifo rapido      # todos los módulos con la prueba FIFO
+make modulo placa fifo       # un solo módulo, con su consola
+make ver                     # ver los módulos  ·  make bajar: cortar todo
+```
+
+Guía completa (pruebas, deploy en varias PCs, cómo moverse en tmux): [deploy/README.md](deploy/README.md).
+
 ## Estructura
 
 Además de un proyecto por módulo, el repo tiene:

@@ -1,0 +1,2 @@
+# estado del último escenario levantado (lo usa bajar.sh para guardar evidencias)
+.ultimo_deploy

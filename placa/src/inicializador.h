@@ -14,6 +14,7 @@
 //consola
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <commons/bitarray.h>
 
 extern t_config* placa_config;
 extern t_log* placa_logger;
@@ -31,6 +32,16 @@ extern char* PATH_OFFLOAD;
 extern int TAM_OFFLOAD;
 extern int RETARDO_OFFLOAD;
 
+
+//memoria fisica
+extern void* memoria;
+extern int cant_marcos;
+
+
+//offload
+extern int archivo_offload;
+extern t_bitarray* slots_offload;
+
 //variables globables
 extern t_list* lista_core;
 extern t_list* lista_jobs;
@@ -38,20 +49,61 @@ extern t_list* lista_jobs;
 //semaforos
 extern pthread_mutex_t mutex_lista_core;
 extern pthread_mutex_t mutex_jobs;
+extern pthread_mutex_t mutex_memoria;
 
 typedef struct {
     int socket_core;
     int id_core;
 }t_core_placa;
 
+
+// [Enunciado pág. 21 - Memoria de Instrucciones] + [pág. 22 - Creación de Job]
+// Estructura administrativa de cada Job en la Placa. Asocia el Job con sus instrucciones.
+// En el Check 3 se suma la tabla de páginas del Job, que por enunciado (pág. 21) es una estructura
+// administrativa y NO se guarda dentro de la memoria de datos.
 typedef struct {
     uint32_t jid;
     char** instrucciones;
     uint32_t cant_instrucciones;
+    t_list* tabla_paginas; //indice en la lista de nr de pagina
+    t_list* asignaciones; // para que se sepa que liberar
 } t_job_placa;
+
+//memoria
+
+//estructura de marcos
+typedef struct {
+    bool ocupado;
+    uint32_t jid;
+    uint32_t nro_pagina;
+} t_marco;
+
+//array de cant_marcos
+extern t_marco* marcos;
+
+// tabla de paginas por job
+typedef struct {
+    bool presente;
+    uint32_t marco;
+    bool lockeada;
+    bool uso;
+    bool modificado;
+    uint64_t ultimo_acceso;
+    uint32_t slot_offload;
+}t_entrada_pagina;
+
+typedef struct {
+    uint32_t pagina_inicio;
+    uint32_t cant_paginas;
+    uint32_t tamanio;
+}t_asignacion;
+
 
 void inicializar_log();
 void inicializar_config();
+void inicializador_memoria();
+int marcos_libres();
+
 
 //funciones de servidor
 void* atender_cliente(void* socket);
