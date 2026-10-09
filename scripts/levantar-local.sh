@@ -4,7 +4,7 @@ set -uo pipefail
 
 # Levanta los 4 modulos en localhost: Placa y Storage -> Planificador -> 3 Cores.
 # La salida de cada proceso va a runtime/logs/<nombre>.out
-# Uso: ./scripts/levantar-local.sh [job_inicial]   (nombre relativo a PATH_INSTRUCCIONES de la Placa)
+# Uso: [PLANIFICADOR_CONFIG=<config>] ./scripts/levantar-local.sh [job_inicial]   (nombre relativo a PATH_INSTRUCCIONES de la Placa)
 
 cd "$(dirname "$0")/.."
 
@@ -13,6 +13,7 @@ LOGS=runtime/logs
 PIDS=runtime/local.pids   # lo usa bajar-local.sh
 JOB_INICIAL="${1:-prueba_minima}"   # solo el nombre: la Placa le antepone su PATH_INSTRUCCIONES
 ESPERA=1   # segundos entre etapas
+PLANIFICADOR_CONFIG="${PLANIFICADOR_CONFIG:-$CONFIGS/planificador.config}" 
 
 lanzar() {
     local nombre="$1"; shift
@@ -30,7 +31,7 @@ lanzar storage ./storage/bin/storage "$CONFIGS/storage.config"
 sleep "$ESPERA"
 
 echo ">>> Planificador"
-lanzar planificador ./planificador/bin/planificador "$CONFIGS/planificador.config" "$JOB_INICIAL"
+lanzar planificador ./planificador/bin/planificador "$PLANIFICADOR_CONFIG" "$JOB_INICIAL"
 sleep "$ESPERA"
 
 echo ">>> Cores"
