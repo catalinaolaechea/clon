@@ -2,16 +2,11 @@
 
 static const char* motivo_to_string(t_motivo_devolucion motivo) {
     switch (motivo) {
-        case MOTIVO_FIN_QUANTUM:        
-            return "FIN_QUANTUM";
-        case MOTIVO_PAGE_FAULT:         
-            return "PAGE_FAULT";
-        case MOTIVO_SYSCALL_BLOQUEANTE: 
-            return "SYSCALL_BLOQUEANTE";
-        case MOTIVO_EXIT:               
-            return "EXIT";
-        default:                        
-            return "DESCONOCIDO";
+        case MOTIVO_FIN_QUANTUM:        return "FIN_QUANTUM";
+        case MOTIVO_PAGE_FAULT:         return "PAGE_FAULT";
+        case MOTIVO_SYSCALL_BLOQUEANTE: return "SYSCALL_BLOQUEANTE";
+        case MOTIVO_EXIT:               return "EXIT";
+        default:                        return "DESCONOCIDO";
     }
 }
 
@@ -22,11 +17,16 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
         t_resultado_ciclo resultado = ejecutar_ciclo(jid, contexto, &pendiente);
 
         if (resultado == CICLO_CONTINUA) {
-            // CHECK INTERRUPT
+            if (hay_interrupcion()) {
+                log_info(core_logger, LOG_INTERRUPCION);
+                return MOTIVO_FIN_QUANTUM;
+            }
             continue;
         }
 
         if (resultado == CICLO_ERROR) {
+            // El motivo ya quedo logueado en ejecutar_ciclo. Se devuelve el Job
+            // para no dejar al Planificador esperando a un Core que no responde.
             log_error(core_logger, "Core %d: se aborta el Job %u por error en el ciclo (PC %u)", identificador, jid, contexto->pc);
             return MOTIVO_EXIT;
         }
@@ -62,12 +62,16 @@ int devolver_job(uint32_t jid, t_contexto* contexto, t_motivo_devolucion motivo)
     return CONEXION_OK;
 }
 
+// DISPATCH_JOB = { uint32 jid, contexto }. Ejecuta el Job y lo devuelve.
 static int atender_dispatch_job(t_buffer* buffer) {
     uint32_t jid = buffer_read_uint32(buffer);
     t_contexto contexto;
     buffer_read_contexto(buffer, &contexto);
 
     log_info(core_logger, LOG_JOB_RECIBIDO, identificador, jid, contexto.pc);
+
+    // Una interrupcion que llego cuando no habia Job corriendo no es para este.
+    limpiar_interrupcion();
 
     t_motivo_devolucion motivo = ejecutar_job(jid, &contexto);
     return devolver_job(jid, &contexto, motivo);
@@ -109,6 +113,6 @@ void esperar_dispatch(void) {
 
         eliminar_buffer(buffer);
 
-        if (estado != CONEXION_OK) return;  
+        if (estado != CONEXION_OK) return;   // se cayo la conexion con el Planificador
     }
 }

@@ -1,6 +1,7 @@
 #include "inicializador.h"
 #include "conexiones.h"
 #include "dispatch.h"
+#include "interrupcion.h"
 
 int main(int argc, char* argv[]) {
 
@@ -18,17 +19,13 @@ int main(int argc, char* argv[]) {
     log_info(core_logger, "Core %d inicializado. Planificador=%s:%s - Placa=%s:%s", identificador, configuracion.ip_planificador, configuracion.puerto_planificador, configuracion.ip_placa, configuracion.puerto_placa);
 
     conectar_a_planificador_y_placa();
-
-    probar_round_trip();  // Check 1: ida y vuelta de un paquete con Planificador y Placa
-
-    // COR-03: segundo socket a Planificador, para interrupciones. Va despues del round-trip:
-    // con los dos canales registrados el Planificador ya puede despachar, y un DISPATCH_JOB
-    // en medio del round-trip se leeria como el eco.
-    conectar_canal_interrupt();
+    conectar_canal_interrupt();   // segundo socket a Planificador, para interrupciones
+    iniciar_hilo_interrupt();     // hilo que escucha ese socket
 
     esperar_dispatch();
 
     log_info(core_logger, "Core %d finalizando", identificador);
+    detener_hilo_interrupt();     
     liberar_conexion(&fd_planificador);
     liberar_conexion(&fd_placa);
     liberar_conexion(&fd_interrupt);
