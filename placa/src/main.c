@@ -1,5 +1,10 @@
 #include "inicializador.h"
 
+// [Enunciado pág. 21 - Módulo Placa / Lineamiento e Implementación]
+// La Placa administra la memoria del sistema: guarda las instrucciones de los Jobs y el espacio
+// de trabajo sobre el que operan. Se ejecuta como: ./bin/placa [Archivo Config]
+// Al iniciar crea un servidor multihilo que atiende de forma concurrente al Planificador y a los
+// Cores. Como se pueden conectar Cores nuevos en cualquier momento, la escucha queda siempre activa.
 int main(int argc, char* argv[]) {
     
     if(argc < 2){
@@ -41,6 +46,10 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
 }
 
+// [Enunciado pág. 23-24 - Comandos locales]
+// La Placa implementa una consola por stdin con los comandos INFO y TLS, que responden en formato
+// "human-readable". Se pueden agregar otros comandos siempre que no modifiquen ni contradigan
+// el funcionamiento del módulo.
 void* atender_consola(void* arg){
     char* linea;
 
@@ -78,8 +87,8 @@ void procesar_comando(char* linea){
     string_array_destroy(args);
 }
 
-// Luego borrar
 
+// debug: CREAR <jid> <archivo> -> igual que el CREAR_JOB del Planificador
 void comando_crear(char** args){
     if (string_array_size(args) != 3) {
         printf("Uso: CREAR <jid> <archivo>\n");
@@ -95,6 +104,7 @@ void comando_crear(char** args){
         printf("No se pudo crear el Job %u\n", jid);
 }
 
+// debug: FETCH <jid> <pc> -> igual que el FETCH_INSTRUCCION del Core, pero sin red
 void comando_fetch(char** args){
     if (string_array_size(args) != 3) {
         printf("Uso: FETCH <jid> <pc>\n");
@@ -116,6 +126,7 @@ void comando_fetch(char** args){
     pthread_mutex_unlock(&mutex_jobs);
 }
 
+// debug: FINALIZAR <jid> -> igual que el FINALIZAR_JOB del Planificador
 void comando_finalizar(char** args){
     if (string_array_size(args) != 2) {
         printf("Uso: FINALIZAR <jid>\n");
@@ -125,8 +136,9 @@ void comando_finalizar(char** args){
     finalizar_job(strtoul(args[1], NULL, 10));
 }
 
-//
-
+// [Enunciado pág. 23 - Comandos locales: INFO]
+// Muestra: porcentaje de memoria y de Offload ocupados; cantidad de frames libres, lockeados y
+// totales; y cantidad de Jobs actuales.
 void comando_info(){
     pthread_mutex_lock(&mutex_lista_core);
     int cantidad_cores = list_size(lista_core);
@@ -142,6 +154,9 @@ void comando_info(){
     */
 }
 
+// [Enunciado pág. 24 - Comandos locales: TLS]
+// Lista todos los Jobs registrados indicando, para cada uno: ID, cantidad de páginas del conjunto
+// residente (las que están cargadas en la Placa) y cantidad de páginas totales.
 void comando_tls(){
     pthread_mutex_lock(&mutex_lista_core);
 
@@ -157,6 +172,9 @@ void comando_tls(){
     */
 }
 
+// [Enunciado pág. 21 - Servidor multihilo] + [pág. 24 - Log obligatorio de conexión]
+// Cada conexión nueva se identifica con el handshake y se deriva a su propio hilo: uno para el
+// Planificador y uno por cada Core. Log obligatorio: "## Módulo: <NOMBRE_MODULO_CONECTADO>"
 void* atender_cliente(void* socket){
 
     int socket_cliente = *(int*) socket;
@@ -223,6 +241,9 @@ void* atender_cliente(void* socket){
 
 }
 
+// [Enunciado pág. 22-23 - Operaciones]
+// Pedidos que llegan desde un Core: obtener una instrucción (Fetch), obtención de marco (MMU),
+// lectura y escritura de datos, y deslockeo de páginas.
 void* atender_core(void* args){
 
     t_core_placa* core = (t_core_placa*) args;
@@ -277,8 +298,15 @@ void* atender_core(void* args){
             break;
 
         }
+        // [Enunciado pág. 16 - Core / Fetch] + [pág. 21 - Memoria de Instrucciones]
+        // El Core pide cada instrucción con el Program Counter, que es el número de instrucción
+        // relativo al Job (PC = 0 es la primera línea). La Placa responde la instrucción de ese
+        // Job; el enunciado no impone una forma específica de obtenerla.
+        // Si el JID no existe o el PC se pasa del final, se responde FETCH_ERROR (decisión del
+        // grupo, SIS-40) en vez de devolver basura.
+        // Log obligatorio (pág. 24): "## JID: <JID> - Obtener instrucción: <PC> - Instrucción: <INSTRUCCIÓN> <...ARGS>"
         case FETCH_INSTRUCCION:{
-            
+
             uint32_t jid = buffer_read_uint32(payload);
             uint32_t pc = buffer_read_uint32(payload);
 
@@ -327,18 +355,29 @@ void* atender_core(void* args){
 
         }
 
+        // [Enunciado pág. 23 - Lectura de datos] (Check 3)
+        // Puede llegar del Core o del Planificador: JID, dirección física y tamaño a leer.
+        // Se responde el contenido del rango pedido.
+        // [Enunciado pág. 23 - Escritura de datos] (Check 3)
+        // Mismos parámetros que la lectura, más el contenido a escribir.
+        // Log obligatorio (pág. 24): "## JID: <JID> - <Lectura/Escritura> - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
         /*case LEER_DATO:{
 
             break;
-            
+
         }
         case ESCRIBIR_DATO:{
 
             break;
         }
-            
+
         */
 
+        // [Enunciado pág. 23 - Obtención de marco] (Check 3)
+        // La pide el Core durante la traducción de la MMU, con el JID y el número de página.
+        // Se consulta la tabla de páginas del Job:
+        //  - si la página está residente, se responde el número de marco y la página queda lockeada;
+        //  - si no está residente, se responde que ocurrió un Page Fault.
         case OBTENER_MARCO:{
             break;
             
@@ -349,10 +388,16 @@ void* atender_core(void* args){
             
         }*/
 
+        // PAGE_FAULT es una RESPUESTA de la Placa al Core (dentro de la obtención de marco), no un
+        // pedido que el Core le mande a la Placa. Ver docs/protocolo.md, op_code 44.
         case PAGE_FAULT:{
             break;
-            
-        }        
+
+        }
+        // [Enunciado pág. 23 - Deslockeo de páginas] (Check 3)
+        // El Core la envía al terminar con éxito cada ciclo de instrucción, o al devolverle el Job
+        // al Planificador (por ejemplo, tras un Page Fault). Se recibe el JID y se liberan los
+        // locks de TODAS sus páginas, para que sus marcos vuelvan a poder ser víctimas de reemplazo.
         case DESLOCKEAR_PAGINAS:{
             break;
             
@@ -381,6 +426,10 @@ void* atender_core(void* args){
 
 }
 
+// [Enunciado pág. 22-23 - Operaciones]
+// Pedidos que llegan desde el Planificador: creación y finalización de Job, asignación y liberación
+// de espacio (ALLOC/FREE), carga de página tras un Page Fault, lectura y escritura de datos de las
+// syscalls de memoria, y deslockeo de páginas al terminar esas syscalls.
 void* atender_planificador(void* planificador){
 
     int socket_cliente = *(int*) planificador;
@@ -435,8 +484,14 @@ void* atender_planificador(void* planificador){
             break;
 
         }
+        // [Enunciado pág. 22 - Creación de Job]
+        // Se recibe un JID y el nombre de un archivo de pseudocódigo, relativo al path base del
+        // config (PATH_INSTRUCCIONES). Con esos datos se crean las estructuras administrativas del Job.
+        // Paginación bajo demanda (pág. 21): el Job arranca SIN marcos asignados.
+        // Respuesta: CREAR_JOB_OK, o CREAR_JOB_ERROR si no se pudo abrir el archivo (SIS-43).
+        // Log obligatorio (pág. 24): "## JID: <JID> - Job Creado"
         case CREAR_JOB:{
-            
+
             uint32_t jid = buffer_read_uint32(payload);
             char* archivo = buffer_read_string(payload);
 
@@ -466,17 +521,34 @@ void* atender_planificador(void* planificador){
 
         }
 
+        // [Enunciado pág. 22 - Asignación de espacio] (Check 3)
+        // Se recibe el JID y el tamaño en bytes; se responde la dirección lógica donde empieza el
+        // espacio asignado. Cada asignación arranca al inicio de una página. Hay que reservar en
+        // el Offload el lugar para respaldar esas páginas: si no alcanza, la operación falla y se
+        // le avisa al Planificador para que finalice el Job.
+        // [Enunciado pág. 22 - Liberación de espacio] (Check 3)
+        // Se recibe el JID y la dirección lógica donde empieza un espacio asignado antes. Se liberan
+        // los marcos de sus páginas y el lugar que tenían reservado en el Offload.
+        // Log obligatorio (pág. 24): "## JID: <JID> - <Asignación/Liberación> - Dirección Lógica: <DIRECCIÓN_LÓGICA> - Tamaño: <TAMAÑO>"
+
+        // [Enunciado pág. 23 - Lectura / Escritura de datos] (Check 3)
+        // Las usa el Planificador en las syscalls de memoria (LOAD_BATCH, LABEL, REPORT y checkpoints).
         /*case LEER_DATO:{
             break;
-            
+
         }
         case ESCRIBIR_DATO:{
             break;
-        
+
         }
-            
+
         */
 
+        // [Enunciado pág. 23 - Finalización de Job]
+        // Solo se recibe un JID. Se liberan todos los marcos que tuviera ocupados, el lugar
+        // reservado en el Offload y todas sus estructuras asociadas.
+        // En el Check 2 todavía no hay marcos ni Offload: solo se liberan las estructuras (SIS-43).
+        // Respuesta: FINALIZAR_JOB_OK siempre, aunque el JID no exista (finalizar es idempotente).
         case FINALIZAR_JOB:{
             
             uint32_t jid = buffer_read_uint32(payload);
@@ -497,6 +569,14 @@ void* atender_planificador(void* planificador){
             break;
             
         }
+        // [Enunciado pág. 23 - Carga de página] (Check 3)
+        // La pide el Planificador cuando un Core informa un Page Fault. Se recibe el JID y el número
+        // de página, y se carga en la memoria de la Placa. Si no hay marcos libres, hay que elegir
+        // una víctima con el algoritmo de reemplazo (pág. 22).
+        // Logs obligatorios (pág. 24):
+        //   "## JID: <JID> - Subida a Memoria - Página: <NRO_PÁGINA> - Marco: <NRO_MARCO>"
+        //   "## JID: <JID> - Bajada al Offload - Página: <NRO_PÁGINA>"
+        //   "## Reemplazo - Marco: <NRO_MARCO> - JID Víctima: <JID> - Página Víctima: <NRO_PÁGINA>"
         case CARGAR_PAGINA:{
             break;
             
@@ -515,6 +595,9 @@ void* atender_planificador(void* planificador){
     
 }
 
+// [Enunciado pág. 24 - Archivo de Configuración: RETARDO_MEMORIA]
+// Tiempo en milisegundos que se debe esperar para dar una respuesta. usleep trabaja en
+// microsegundos, por eso el * 1000.
 void retardo_memoria(){
     usleep(RETARDO_MEMORIA*1000);
 }
@@ -534,6 +617,10 @@ t_job_placa* buscar_job(uint32_t jid_buscado){
 }
 
 
+// [Enunciado pág. 21 - Memoria de Instrucciones]
+// Los archivos de pseudocódigo son archivos de texto con una instrucción por línea, separadas
+// por '\n'. La memoria de instrucciones es ilimitada (a diferencia de la memoria de usuario),
+// así que se lee el archivo entero una sola vez, al crear el Job.
 //Devuelve las lineas del archivo o null si no se pudo abrir
 char** leer_instrucciones(char* path, uint32_t* cantidad){
 
@@ -574,6 +661,9 @@ t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad){
 
 }
 
+// [Enunciado pág. 21 - Memoria de Instrucciones] + [pág. 22 - Creación de Job]
+// Cada grupo implementa una estructura que asocie cada Job con su archivo: acá es t_job_placa
+// guardado en lista_jobs. El nombre del archivo es relativo a PATH_INSTRUCCIONES.
 t_job_placa* inicializar_job(uint32_t jid, char* nombre_archivo){
     char* path = string_from_format("%s%s",PATH_INSTRUCCIONES ,nombre_archivo);
 
@@ -611,6 +701,9 @@ t_job_placa* quitar_job(uint32_t jid_buscado){
 
 }
 
+// [Enunciado pág. 23 - Finalización de Job]
+// Se liberan todas las estructuras asociadas al Job. En el Check 3 acá se suman la liberación de
+// sus marcos y del lugar reservado en el Offload.
 void finalizar_job(uint32_t jid){
 
     pthread_mutex_lock(&mutex_jobs);
