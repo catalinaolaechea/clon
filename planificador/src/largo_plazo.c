@@ -36,6 +36,8 @@ static void* planificar_largo_plazo(void* arg) {
         cambiar_estado(pcb, ESTADO_READY);
         corto_plazo_avisar_job_ready();
     }
+
+    return NULL;
 }
 
 void inicializar_largo_plazo(void) {
