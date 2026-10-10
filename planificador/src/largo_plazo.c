@@ -6,6 +6,7 @@
 #include "pcb.h"
 #include "cliente_placa.h"
 #include "corto_plazo.h"
+#include "jobs.h"
 
 #define ERROR_SEM_INIT -1
 
@@ -27,8 +28,9 @@ static void* planificar_largo_plazo(void* arg) {
         bool job_creado = placa_crear_job(pcb->jid, pcb->archivo_pseudocodigo);
 
         if (!job_creado) {
-            log_error(planificador_logger, "Error en la placa al crear un job");
-            exit(EXIT_FAILURE);
+            log_error(planificador_logger, "La Placa no pudo crear el Job %u: se finaliza", pcb->jid);
+            finalizar_job(pcb);
+            continue;
         }
 
         cambiar_estado(pcb, ESTADO_READY);
