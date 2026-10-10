@@ -32,9 +32,9 @@ t_pcb* pcb_crear(uint32_t jid, char* archivo_pseudocodigo) {
     pcb->estado = ESTADO_NEW;
     pcb->archivo_pseudocodigo = strdup(archivo_pseudocodigo);
     memset(&pcb->contexto, 0, sizeof(t_contexto));
-    pcb->core_asignado = -1; // Inicialmente no asignado a ningún core
+    pcb->core_asignado = -1; // Inicialmente no asignado a ningun core
     pcb->syscall_pendiente = 0; // Inicialmente no hay syscall pendiente
-    pcb->estimacion_rafaga = config_planificador.estimacion_inicial; // Inicialmente se establece la estimación de ráfaga según la configuración
+    pcb->estimacion_rafaga = config_planificador.estimacion_inicial; // Inicialmente se establece la estimacion de rafaga segun la configuracion
     memset(&pcb->estadisticas, 0, sizeof(t_estadisticas));
     inicializar_tiempos(&pcb->estadisticas);
     temporal_create_and_stop(&pcb->espera_en_ready);

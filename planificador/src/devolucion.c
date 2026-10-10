@@ -44,6 +44,7 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
             break;
         case MOTIVO_EXIT:
             log_info(planificador_logger, LOG_SYSCALL, jid, "EXIT");
+            pcb->estadisticas.cantidad_syscalls++;  // EXIT tambien cuenta: antes de imprimir las estadisticas
             finalizar_job(pcb);  // ultimo uso de 'pcb': SIS-54 la libera adentro
             break;
         default:

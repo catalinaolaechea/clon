@@ -16,7 +16,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "Envío de paquete para JID %u fallido", jid);
+        log_error(planificador_logger, "Envio de paquete para JID %u fallido", jid);
         return false;
     }
 
@@ -25,7 +25,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "la Placa no respondió CREAR_JOB del JID %u", jid);
+        log_error(planificador_logger, "la Placa no respondio CREAR_JOB del JID %u", jid);
         return false;
     }
 
@@ -34,7 +34,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "la Placa no respondió CREAR_JOB del JID %u", jid);
+        log_error(planificador_logger, "la Placa no respondio CREAR_JOB del JID %u", jid);
         return false;
     }
 

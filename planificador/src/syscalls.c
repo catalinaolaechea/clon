@@ -1,6 +1,7 @@
 #include "syscalls.h"
 #include "inicializador.h"
 #include "jobs.h"
+#include "estados.h"
 #include <utils/protocolo.h>
 #include <stdlib.h>
 
@@ -10,9 +11,17 @@ void atender_init_job(int fd, int identificador_core, t_buffer* buffer) {
 
     log_info(planificador_logger, LOG_SYSCALL, jid, "INIT_JOB");
 
+    // el que la pide esta en EXEC: solo lo toca el hilo de su Core, que es este
+    t_pcb* pcb = buscar_pcb_en_cola(ESTADO_EXEC, jid);
+    if (pcb != NULL) {
+        pcb->estadisticas.cantidad_syscalls++;
+    } else {
+        log_warning(planificador_logger, "INIT_JOB del Job %u, que no esta en EXEC: no se cuenta la syscall", jid);
+    }
+
     uint32_t jid_nuevo = crear_job(archivo);
 
-    log_debug(planificador_logger, "Job %u creó al Job %u (%s)", jid, jid_nuevo, archivo);
+    log_debug(planificador_logger, "Job %u creo al Job %u (%s)", jid, jid_nuevo, archivo);
 
     free(archivo);
 

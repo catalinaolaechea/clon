@@ -42,7 +42,7 @@ void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente) {
     bool result = list_remove_element(colas_estados[estado_anterior], pcb);
 
     if (!result) {
-        log_error(planificador_logger, "Error al cambiar estado del PCB con JID %u: no se encontró en la cola de estado %d", pcb->jid, estado_anterior);
+        log_error(planificador_logger, "Error al cambiar estado del PCB con JID %u: no se encontro en la cola de estado %d", pcb->jid, estado_anterior);
         pthread_mutex_unlock(&mutex_estados);
         return;
     }

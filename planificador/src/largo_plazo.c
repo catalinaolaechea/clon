@@ -22,7 +22,7 @@ static void* planificar_largo_plazo(void* arg) {
         t_pcb* pcb = primer_pcb_de_cola(ESTADO_NEW);
         if (pcb == NULL) {
             log_error(planificador_logger, "Error, no hay pcbs encolados");
-            sem_post(&sem_grado_multiprogramacion);  // devolver el lugar: no se admitió a nadie
+            sem_post(&sem_grado_multiprogramacion);  // devolver el lugar: no se admitio a nadie
             continue;
         }
         bool job_creado = placa_crear_job(pcb->jid, pcb->archivo_pseudocodigo);

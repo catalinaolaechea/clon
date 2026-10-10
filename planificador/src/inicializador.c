@@ -16,7 +16,7 @@ static t_algoritmo algoritmo_desde_string(char* valor) {
     } else if (strcmp(valor, "HRRN") == 0) {
         return ALGORITMO_HRRN;
     } else {
-        fprintf(stderr, "ERROR - Algoritmo de planificación desconocido: %s\n", valor);
+        fprintf(stderr, "ERROR - Algoritmo de planificacion desconocido: %s\n", valor);
         exit(EXIT_FAILURE);
     }
 }
