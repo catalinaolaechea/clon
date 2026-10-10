@@ -24,6 +24,16 @@
         }
       ],
       "preLaunchTask": "build"
+    },
+    {
+      "name": "corto.txt (local)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/core",
+      "args": ["${workspaceFolder}/../configs/local/core1.config", "1"],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "preLaunchTask": "build"
     }
   ]
 }
