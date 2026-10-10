@@ -51,6 +51,7 @@ int main(int argc, char* argv[]) {
 // "human-readable". Se pueden agregar otros comandos siempre que no modifiquen ni contradigan
 // el funcionamiento del módulo.
 void* atender_consola(void* arg){
+    (void) arg;  // firma exigida por pthread_create, no se usa
     char* linea;
 
     while((linea = readline("Placa> ")) !=NULL){
