@@ -29,7 +29,7 @@ static void* planificar_largo_plazo(void* arg) {
 
         if (!job_creado) {
             log_error(planificador_logger, "La Placa no pudo crear el Job %u: se finaliza", pcb->jid);
-            finalizar_job(pcb);
+            finalizar_job(pcb, FINALIZACION_ERROR_CREAR_JOB);
             continue;
         }
 
