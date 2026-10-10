@@ -85,3 +85,12 @@ t_pcb* buscar_pcb_en_cola(t_estado estado, uint32_t jid) {
     pthread_mutex_unlock(&mutex_estados);
     return encontrado;
 }
+
+bool sacar_pcb_de_cola(t_pcb* pcb) {
+    pthread_mutex_lock(&mutex_estados);
+
+    bool sacado = list_remove_element(colas_estados[pcb->estado], pcb);
+
+    pthread_mutex_unlock(&mutex_estados);
+    return sacado;
+}
