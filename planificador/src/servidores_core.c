@@ -2,6 +2,7 @@
 #include "inicializador.h"
 #include "corto_plazo.h"
 #include "devolucion.h"
+#include "syscalls.h"
 
 t_list* cores_conectados;
 pthread_mutex_t mutex_cores = PTHREAD_MUTEX_INITIALIZER;
@@ -174,6 +175,9 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
             mensaje_prueba_destruir(mensaje);
             break;
         }
+        case SYSCALL_INIT_JOB:
+            atender_init_job(fd, identificador, buffer);
+            break;
         case DEVOLUCION_JOB:
             recibir_devolucion(identificador, buffer);
             break;
