@@ -4,5 +4,6 @@
 #include <stdbool.h>
 
 bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo);
+bool placa_finalizar_job(uint32_t jid);
 
 #endif
