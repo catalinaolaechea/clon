@@ -198,10 +198,22 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 | `10` | `DISPATCH_JOB` | Planif → Core | ✔ `uint32 jid`, `contexto` (14 × `uint32`) |
 | `11` | `DEVOLUCION_JOB` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint8 motivo` |
 | `12` | `INTERRUPCION` | Planif → Core | ✔ `uint32 jid` (canal **interrupt**) |
-| `20 – 29` | `SYSCALL_*` | Core → Planif | una por syscall, en el orden del enunciado |
-| `30 – 39` | respuestas de syscall | Planif → Core | — |
+| `20` | `SYSCALL_INIT_JOB` | Core → Planif | ✔ `uint32 jid` (el Job que la pide), `string archivo` (canal **dispatch**) |
+| `21 – 29` | `SYSCALL_*` | Core → Planif | reservados: una por syscall, en el orden del enunciado |
+| `30` | `SYSCALL_OK` | Planif → Core | ✔ vacío (canal **dispatch**) |
+| `31 – 39` | respuestas de syscall con valor | Planif → Core | reservados (p. ej. la dirección lógica de `ALLOC`) |
 
 `motivo` de la devolución: fin de quantum, page fault, syscall bloqueante, `EXIT`.
+
+**Syscalls no bloqueantes (`INIT_JOB`; en el Check 3 también `ALLOC` y `FREE`):** el Core manda la syscall
+por el canal dispatch y **se queda esperando la respuesta**, sin devolver el Job. Cuando llega, sigue con el
+siguiente ciclo del **mismo** Job. Para `INIT_JOB` la respuesta es siempre `SYSCALL_OK`: el Planificador
+solo crea el Job en `NEW`, y si el archivo no existe se entera después, cuando el largo plazo le pide a la
+Placa crearlo. El JID que viaja es el del Job **que pide** la syscall (lo necesita el log obligatorio
+`## (<JID>) - Solicitó syscall: INIT_JOB`), no el del Job nuevo. `archivo` es solo el nombre, relativo a
+`PATH_INSTRUCCIONES` de la Placa.
+
+`EXIT` no tiene op_code de syscall: el Core la manda como `DEVOLUCION_JOB` con `motivo = EXIT`.
 
 **Por qué `INTERRUPCION` lleva el JID:** la interrupción viaja por otro socket y puede llegar tarde.
 Si el Job interrumpido ya hizo `EXIT` y el Core está ejecutando otro, el Core compara el JID con el del
@@ -288,3 +300,4 @@ de mergear, porque del otro lado hay alguien leyendo esos campos en ese orden.
 |---|---|
 | 2026-08-27 | Versión inicial. Header, tipos, handshake y mensajes del Check 1 definidos; rangos y op_codes de checks 2–4 reservados |
 | 2026-10-08 | **Cambia `INTERRUPCION`: de vacío a `uint32 jid`** (SIS-50 / SIS-48). Se documentan `FETCH_ERROR` (50), `CREAR_JOB_OK` / `CREAR_JOB_ERROR` / `FINALIZAR_JOB_OK` (81–83) y el payload de `FINALIZAR_JOB`, que ya estaban en el código |
+| 2026-10-09 | **Nuevos `SYSCALL_INIT_JOB` (20) y `SYSCALL_OK` (30)** (SIS-53 / SIS-47): primera syscall del Core al Planificador y su respuesta genérica |

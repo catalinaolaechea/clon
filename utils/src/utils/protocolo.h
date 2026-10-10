@@ -47,6 +47,8 @@ typedef enum {
     DISPATCH_JOB        = 10,
     DEVOLUCION_JOB      = 11,
     INTERRUPCION        = 12,  // { uint32 jid } por el canal interrupt
+    SYSCALL_INIT_JOB    = 20,  // { uint32 jid (el que la pide), string archivo } por dispatch
+    SYSCALL_OK          = 30,  // vacío: respuesta a una syscall no bloqueante sin valor de retorno
 
     // --- 40-69: Core <-> Placa (Check 3) ---
     FETCH_INSTRUCCION     = 40,
