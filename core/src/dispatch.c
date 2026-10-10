@@ -1,4 +1,5 @@
 #include "dispatch.h"
+#include "syscalls.h"
 
 static const char* motivo_to_string(t_motivo_devolucion motivo) {
     switch (motivo) {
@@ -42,7 +43,25 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
             return MOTIVO_EXIT;
         }
 
-        // TODO: syscalls (INIT_JOB, ALLOC, ...) e instrucciones de entrenamiento.
+        // INIT_JOB no bloquea: se pide al Planificador, se espera la respuesta y sigue el mismo Job.
+        if (strcmp(pendiente->nombre, "INIT_JOB") == 0) {
+            if (pendiente->cantidad_parametros != 1) {
+                log_error(core_logger, "Core %d: INIT_JOB espera 1 parametro y recibio %d (JID %u, PC %u)", identificador, pendiente->cantidad_parametros, jid, contexto->pc);
+                destruir_instruccion(pendiente);
+                return MOTIVO_EXIT;
+            }
+
+            bool ok = solicitar_init_job(jid, pendiente->parametros[0]);
+            destruir_instruccion(pendiente);  // recien ahora: parametros[0] apunta adentro de la instruccion
+
+            if (!ok) return MOTIVO_EXIT;  // el motivo ya quedo logueado
+
+            contexto->pc++;  // ejecutar_ciclo no suma 1 en las no basicas: sin esto se repite el INIT_JOB
+            if (check_interrupt()) return MOTIVO_FIN_QUANTUM;
+            continue;
+        }
+
+        // TODO: syscalls (ALLOC, ...) e instrucciones de entrenamiento.
         log_error(core_logger, "Core %d: instruccion %s todavia no implementada (JID %u) - se finaliza el Job", identificador, pendiente->nombre, jid);
         destruir_instruccion(pendiente);
         return MOTIVO_EXIT;
