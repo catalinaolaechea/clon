@@ -10,6 +10,14 @@ static const char* motivo_to_string(t_motivo_devolucion motivo) {
     }
 }
 
+// CHECK INTERRUPT: va al final de cada ciclo que deja seguir al Job, nunca en el medio de una instruccion.
+static bool check_interrupt(void) {
+    if (!hay_interrupcion()) return false;
+
+    log_info(core_logger, LOG_INTERRUPCION);
+    return true;
+}
+
 t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
 
     while (1) {
@@ -17,10 +25,7 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
         t_resultado_ciclo resultado = ejecutar_ciclo(jid, contexto, &pendiente);
 
         if (resultado == CICLO_CONTINUA) {
-            if (hay_interrupcion()) {
-                log_info(core_logger, LOG_INTERRUPCION);
-                return MOTIVO_FIN_QUANTUM;
-            }
+            if (check_interrupt()) return MOTIVO_FIN_QUANTUM;
             continue;
         }
 
