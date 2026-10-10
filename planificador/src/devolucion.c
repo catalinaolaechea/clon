@@ -4,6 +4,7 @@
 #include "servidores_core.h"
 #include "corto_plazo.h"
 #include "jobs.h"
+#include "syscalls.h"
 
 #define DEVOLUCION_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint8_t))
 
@@ -42,6 +43,7 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
             corto_plazo_avisar_job_ready();
             break;
         case MOTIVO_EXIT:
+            log_info(planificador_logger, LOG_SYSCALL, jid, "EXIT");
             finalizar_job(pcb);  // ultimo uso de 'pcb': SIS-54 la libera adentro
             break;
         default:
