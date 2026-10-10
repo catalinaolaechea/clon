@@ -48,4 +48,7 @@ char* estado_to_string(t_estado estado);
 t_pcb* pcb_crear(uint32_t jid, char* archivo_pseudocodigo);
 void pcb_destruir(t_pcb* pcb);
 
+// Frena el cronometro del estado que deja, arranca el del que entra y cuenta READY->EXEC.
+void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguiente);
+
 #endif

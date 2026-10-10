@@ -55,3 +55,28 @@ void pcb_destruir(t_pcb* pcb) {
     temporal_destroy(pcb->estadisticas.tiempo_new);
     free(pcb);
 }
+
+// Frenar un cronometro que ya esta frenado no cambia nada, por eso no hace falta chequearlo antes
+void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguiente) {
+    t_estadisticas* estadisticas = &pcb->estadisticas;
+
+    if (anterior == ESTADO_NEW) {
+        temporal_stop(estadisticas->tiempo_new);
+    }
+
+    if (anterior == ESTADO_READY) {
+        temporal_stop(estadisticas->tiempo_ready);
+    }
+
+    if (siguiente == ESTADO_READY) {
+        temporal_resume(estadisticas->tiempo_ready);
+    }
+
+    if (anterior == ESTADO_READY && siguiente == ESTADO_EXEC) {
+        estadisticas->transiciones_ready_exec++;
+    }
+
+    if (siguiente == ESTADO_EXIT) {
+        temporal_stop(estadisticas->tiempo_total);
+    }
+}
