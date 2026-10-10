@@ -2,7 +2,7 @@
 
 Herramientas para levantar los módulos del TP con las pruebas de la cátedra
 ([sisoputnfrba/entrenados-pruebas](https://github.com/sisoputnfrba/entrenados-pruebas)):
-**todo en tu PC** o **repartido en varias PCs**, como en Plug & Pray.
+**todo en tu PC** o **repartido en varias PCs**.
 
 ## Índice
 
@@ -227,7 +227,8 @@ Para un test automático de la placa por consola (Fetch, crear, finalizar...):
 
 ## 7. Deploy en varias PCs
 
-Como en Plug & Pray: **todas las PCs corren el mismo comando de la prueba**, y cada una dice
+**Todas las PCs corren el mismo comando de la prueba**, y cada una dice qué módulos
+levanta y dónde están los demás.
 qué módulos levanta y dónde están los demás.
 
 ### Qué necesita cada PC
