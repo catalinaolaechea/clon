@@ -42,12 +42,13 @@ void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente) {
     bool result = list_remove_element(colas_estados[estado_anterior], pcb);
 
     if (!result) {
-        log_error(planificador_logger, "Error al cambiar estado del PCB con JID %u: no se encontró en la cola de estado %d", pcb->jid, estado_anterior);
+        log_error(planificador_logger, "Error al cambiar estado del PCB con JID %u: no se encontro en la cola de estado %d", pcb->jid, estado_anterior);
         pthread_mutex_unlock(&mutex_estados);
         return;
     }
 
     pcb->estado = estado_siguiente;
+    pcb_actualizar_estadisticas(pcb, estado_anterior, estado_siguiente);  // bajo el mismo mutex que el cambio
 
     // Agregar el PCB a la nueva cola de estado
     list_add(colas_estados[estado_siguiente], pcb);
@@ -83,4 +84,13 @@ t_pcb* buscar_pcb_en_cola(t_estado estado, uint32_t jid) {
 
     pthread_mutex_unlock(&mutex_estados);
     return encontrado;
+}
+
+bool sacar_pcb_de_cola(t_pcb* pcb) {
+    pthread_mutex_lock(&mutex_estados);
+
+    bool sacado = list_remove_element(colas_estados[pcb->estado], pcb);
+
+    pthread_mutex_unlock(&mutex_estados);
+    return sacado;
 }

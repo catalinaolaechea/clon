@@ -144,7 +144,7 @@ bool interrumpir_core(int identificador, uint32_t jid, uint32_t numero_despacho)
 
     pthread_mutex_unlock(&mutex_cores);
     if (enviado) {
-        log_info(planificador_logger, "Fin de quantum del JID %u: interrupción enviada al Core %d", jid, identificador);
+        log_info(planificador_logger, "Fin de quantum del JID %u: interrupcion enviada al Core %d", jid, identificador);
     }
 
     return enviado;
@@ -182,7 +182,7 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
             recibir_devolucion(identificador, buffer);
             break;
         default:
-            log_warning(planificador_logger, "Código de operación desconocido recibido: %u", op_code);
+            log_warning(planificador_logger, "Codigo de operacion desconocido recibido: %u", op_code);
     }
 }
 
@@ -211,7 +211,7 @@ static void* atender_core(void* ctx) {
         int result = recibir_operacion(fd, &op_code);
 
         if (result == CONEXION_ERROR) {
-            log_error(planificador_logger, "Error al recibir operación del Core con identificador: %d", identificador);
+            log_error(planificador_logger, "Error al recibir operacion del Core con identificador: %d", identificador);
             break;
         }
 
@@ -232,7 +232,7 @@ static void* atender_core(void* ctx) {
         eliminar_buffer(buffer);
     }
 
-    // TODO: Ante la desconexión de un core, el job que estaba ejecutando debe volver a READY
+    // TODO: Ante la desconexion de un core, el job que estaba ejecutando debe volver a READY
     // y debe solicitar a la placa el deslockeo de sus paginas
     desregistrar_core(identificador, canal);
     liberar_conexion(&fd);
@@ -258,7 +258,7 @@ static void* escuchar_cores(void* arg) {
 
         int thread_result = pthread_create(&hilo_core, NULL, atender_core, ctx);
         if (thread_result != THREAD_CREATED) {
-            log_error(planificador_logger, "No se pudo crear el hilo de atención del Core");
+            log_error(planificador_logger, "No se pudo crear el hilo de atencion del Core");
             free(ctx);
             liberar_conexion(&fd_cliente);
             continue;

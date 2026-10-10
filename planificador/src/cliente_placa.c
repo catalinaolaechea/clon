@@ -16,7 +16,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "Envío de paquete para JID %u fallido", jid);
+        log_error(planificador_logger, "Envio de paquete para JID %u fallido", jid);
         return false;
     }
 
@@ -25,7 +25,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "la Placa no respondió CREAR_JOB del JID %u", jid);
+        log_error(planificador_logger, "la Placa no respondio CREAR_JOB del JID %u", jid);
         return false;
     }
 
@@ -34,7 +34,7 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (resultado != CONEXION_OK) {
         pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
-        log_error(planificador_logger, "la Placa no respondió CREAR_JOB del JID %u", jid);
+        log_error(planificador_logger, "la Placa no respondio CREAR_JOB del JID %u", jid);
         return false;
     }
 
@@ -44,6 +44,51 @@ bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo) {
 
     if (op_code != CREAR_JOB_OK) {
         log_error(planificador_logger, "Error al crear el JOB con JID %u - archivo %s", jid, archivo_pseudocodigo);
+        return false;
+    }
+
+    return true;
+}
+
+bool placa_finalizar_job(uint32_t jid) {
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(FINALIZAR_JOB);
+    buffer_add_uint32(paquete->buffer, jid);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar FINALIZAR_JOB del JID %u a la Placa", jid);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio FINALIZAR_JOB del JID %u", jid);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio FINALIZAR_JOB del JID %u", jid);
+        return false;
+    }
+
+    eliminar_buffer(buffer);  // FINALIZAR_JOB_OK viene vacio, pero hay que sacarlo del socket
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+
+    if (op_code != FINALIZAR_JOB_OK) {
+        log_error(planificador_logger, "La Placa respondio %u a FINALIZAR_JOB del JID %u", op_code, jid);
         return false;
     }
 

@@ -44,7 +44,8 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
             break;
         case MOTIVO_EXIT:
             log_info(planificador_logger, LOG_SYSCALL, jid, "EXIT");
-            finalizar_job(pcb);  // ultimo uso de 'pcb': SIS-54 la libera adentro
+            pcb->estadisticas.cantidad_syscalls++;  // EXIT tambien cuenta: antes de imprimir las estadisticas
+            finalizar_job(pcb, FINALIZACION_EXIT);  // ultimo uso de 'pcb': se libera adentro
             break;
         default:
             log_warning(planificador_logger, "Job %u devuelto con motivo %u, todavia no soportado", jid, motivo);
