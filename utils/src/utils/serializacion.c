@@ -182,6 +182,11 @@ void buffer_add_string(t_buffer* buffer, char* str) {
     buffer_add(buffer, str, longitud);
 }
 
+void buffer_add_bloque(t_buffer* buffer, void* datos, uint32_t tamanio) {
+    buffer_add_uint32(buffer, tamanio);
+    buffer_add(buffer, datos, tamanio);
+}
+
 void buffer_read(t_buffer* buffer, void* dest, uint32_t size) {
     memcpy(dest, buffer->stream + buffer->offset, size);
     buffer->offset += size;
@@ -204,4 +209,13 @@ char* buffer_read_string(t_buffer* buffer) {
     char* str = malloc(longitud);
     buffer_read(buffer, str, longitud);
     return str;
+}
+
+void* buffer_read_bloque(t_buffer* buffer, uint32_t* tamanio) {
+    *tamanio = buffer_read_uint32(buffer);
+    if (*tamanio == 0) return NULL;  // malloc(0) puede devolver algo no-NULL que igual hay que liberar
+
+    void* datos = malloc(*tamanio);
+    buffer_read(buffer, datos, *tamanio);
+    return datos;
 }
