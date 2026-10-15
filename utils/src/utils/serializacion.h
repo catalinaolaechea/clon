@@ -36,11 +36,13 @@ t_list* recibir_paquete(int socket_cliente);
 void buffer_add_uint32(t_buffer* buffer, uint32_t valor);
 void buffer_add_uint8 (t_buffer* buffer, uint8_t valor);
 void buffer_add_string(t_buffer* buffer, char* str);
+void buffer_add_bloque(t_buffer* buffer, void* datos, uint32_t tamanio); 
 void buffer_add       (t_buffer* buffer, void* data, uint32_t size);
 
 uint32_t buffer_read_uint32(t_buffer* buffer);
 uint8_t  buffer_read_uint8 (t_buffer* buffer);
 char*    buffer_read_string(t_buffer* buffer);   // malloc: libera el llamador
+void*    buffer_read_bloque(t_buffer* buffer, uint32_t* tamanio);  
 void     buffer_read       (t_buffer* buffer, void* dest, uint32_t size);
 
 

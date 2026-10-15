@@ -3,9 +3,9 @@
 Contrato de mensajes entre los 4 módulos. **Este documento manda**: si el código y esta tabla no
 coinciden, el bug está en el código. Su implementación vive en `utils/src/utils/protocolo.h`.
 
-> **Estado:** el Check 1 (12/09) está definido y es implementable. Los mensajes de los checks 2 a 4
-> tienen **el op_code reservado** para que nadie colisione, pero su payload se define en el check
-> que corresponda. Ver "Op_codes reservados".
+> **Estado:** los mensajes de los checks 1 a 3 están definidos y son implementables. Los del Check 4
+> (Planificador ↔ Storage y las syscalls de checkpoints) tienen **el op_code reservado** para que
+> nadie colisione; su payload se define en ese check. Ver "Op_codes reservados".
 
 ---
 
@@ -198,12 +198,32 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 | `10` | `DISPATCH_JOB` | Planif → Core | ✔ `uint32 jid`, `contexto` (14 × `uint32`) |
 | `11` | `DEVOLUCION_JOB` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint8 motivo` |
 | `12` | `INTERRUPCION` | Planif → Core | ✔ `uint32 jid` (canal **interrupt**) |
+| `13` | `DEVOLUCION_PAGE_FAULT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint32 nro_pagina` |
 | `20` | `SYSCALL_INIT_JOB` | Core → Planif | ✔ `uint32 jid` (el Job que la pide), `string archivo` (canal **dispatch**) |
-| `21 – 29` | `SYSCALL_*` | Core → Planif | reservados: una por syscall, en el orden del enunciado |
+| `21` | `SYSCALL_ALLOC` | Core → Planif | ✔ `uint32 jid`, `uint32 tamanio` |
+| `22` | `SYSCALL_FREE` | Core → Planif | ✔ `uint32 jid`, `uint32 dir_logica` |
+| `23` | `SYSCALL_LOAD_BATCH` | Core → Planif | ✔ `uint32 jid`, `contexto`, `string archivo`, `uint32 tamanio`, `lista_direcciones` |
+| `24` | `SYSCALL_LABEL` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint32 tamanio`, `lista_direcciones` |
+| `25` | `SYSCALL_REPORT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint32 tamanio`, `lista_direcciones` |
+| `26 – 28` | `SAVE_CHECKPOINT`, `LOAD_CHECKPOINT`, `DELETE_CHECKPOINT` | Core → Planif | reservados (Check 4) |
 | `30` | `SYSCALL_OK` | Planif → Core | ✔ vacío (canal **dispatch**) |
-| `31 – 39` | respuestas de syscall con valor | Planif → Core | reservados (p. ej. la dirección lógica de `ALLOC`) |
+| `31` | `RESPUESTA_ALLOC` | Planif → Core | ✔ `uint32 dir_logica` |
+| `32` | `SYSCALL_ERROR` | Planif → Core | ✔ vacío: la syscall no se pudo hacer y el Job se finaliza |
 
-`motivo` de la devolución: fin de quantum, page fault, syscall bloqueante, `EXIT`.
+`motivo` de la devolución: fin de quantum, page fault, syscall bloqueante, `EXIT`. El page fault viaja
+en su propio mensaje (`13`) porque necesita la página: agregarle un campo a `DEVOLUCION_JOB`
+cambiaría un mensaje que Core y Planificador ya usan.
+
+**Syscalls bloqueantes (`LOAD_BATCH`, `LABEL`, `REPORT`):** cada una es **un solo mensaje** que
+devuelve el Job y trae todo lo que el Planificador necesita: contexto, parámetros y las direcciones
+físicas ya traducidas. Así el pedido llega entero o no llega; con dos mensajes, una desconexión en el
+medio deja al Planificador con medio pedido. Las páginas siguen **lockeadas** hasta que el
+Planificador termina el servicio y pide el deslockeo. El PC del contexto ya apunta a la siguiente
+instrucción.
+
+**`ALLOC` sin lugar en el Offload:** el Planificador responde `SYSCALL_ERROR` y anota el motivo en la
+PCB. El Core deja de ejecutar y devuelve el Job con `DEVOLUCION_JOB` y `motivo = EXIT`, y el
+Planificador lo finaliza con el motivo anotado. Así no queda un Core ejecutando un Job que ya no existe.
 
 **Syscalls no bloqueantes (`INIT_JOB`; en el Check 3 también `ALLOC` y `FREE`):** el Core manda la syscall
 por el canal dispatch y **se queda esperando la respuesta**, sin devolver el Job. Cuando llega, sigue con el
@@ -230,9 +250,29 @@ una instrucción.
 | `42` | `OBTENER_MARCO` | Core → Placa | ✔ `uint32 jid`, `uint32 nro_pagina` |
 | `43` | `RESPUESTA_MARCO` | Placa → Core | ✔ `uint32 nro_marco` (la página queda **lockeada**) |
 | `44` | `PAGE_FAULT` | Placa → Core | ✔ `uint32 jid`, `uint32 nro_pagina` |
-| `45 – 48` | lectura y escritura de memoria | Core ↔ Placa | — |
-| `49` | `DESLOCKEAR_PAGINAS` | Core → Placa | ✔ `uint32 jid` (deslockea **todas** las del Job) |
+| `45` | `LEER_MEMORIA` | Core/Planif → Placa | ✔ `uint32 jid`, `uint32 dir_fisica`, `uint32 tamanio` |
+| `46` | `RESPUESTA_LEER_MEMORIA` | Placa → Core/Planif | ✔ `bloque contenido` |
+| `47` | `ESCRIBIR_MEMORIA` | Core/Planif → Placa | ✔ `uint32 jid`, `uint32 dir_fisica`, `bloque contenido` |
+| `48` | `ESCRIBIR_MEMORIA_OK` | Placa → Core/Planif | ✔ vacío |
+| `49` | `DESLOCKEAR_PAGINAS` | Core/Planif → Placa | ✔ `uint32 jid` (deslockea **todas** las del Job) |
 | `50` | `FETCH_ERROR` | Placa → Core | ✔ `uint32 motivo`: `0` PC fuera de rango, `1` JID inexistente (`t_fetch_error`) |
+| `51` | `DESLOCKEO_OK` | Placa → Core/Planif | ✔ vacío |
+| `52` | `OBTENER_TAM_PAGINA` | Core → Placa | ✔ vacío. Se pide una vez, apenas termina el handshake |
+| `53` | `RESPUESTA_TAM_PAGINA` | Placa → Core | ✔ `uint32 tam_pagina` |
+
+**`45 – 49` y `51` también los usa el Planificador.** Leer, escribir y deslockear son la misma
+operación para la Placa venga de quien venga (pág. 23): un solo `case` y un solo serializador. Es la
+única excepción a "un rango por par de módulos".
+
+Un pedido de lectura o escritura **no cruza de página**: el que pide ya lo partió, uno por cada par
+`[dir_fisica; tamanio]` de la traducción.
+
+**`DESLOCKEAR_PAGINAS` tiene respuesta** para garantizar el orden: sin ella, el Core podría mandar el
+próximo `OBTENER_MARCO` antes de que la Placa procese el deslockeo, y un reemplazo elegiría la víctima
+con locks viejos.
+
+**`TAM_PAGINA` se pide aparte** porque el config del Core no lo tiene (pág. 20) y la MMU lo necesita.
+Se pide con su propio mensaje para que el handshake siga siendo igual para todos los módulos.
 
 ### Planificador ↔ Placa (70 – 99)
 
@@ -240,17 +280,21 @@ una instrucción.
 |---|---|---|
 | `70` | `CREAR_JOB` | Planif → Placa (`uint32 jid`, `string archivo_pseudocodigo`) |
 | `71` | `FINALIZAR_JOB` | Planif → Placa (`uint32 jid`) |
-| `72 – 75` | `ALLOC` / `FREE` y sus respuestas | Planif ↔ Placa |
-| `76` | `CARGAR_PAGINA` | Planif → Placa (resolución del page fault) |
-| `77 – 79` | lectura y escritura de memoria del Job | Planif ↔ Placa |
-| `80` | `DESLOCKEAR_PAGINAS` | Planif → Placa (fin de syscall de memoria) |
+| `72` | `ALLOC` | Planif → Placa (`uint32 jid`, `uint32 tamanio`) |
+| `73` | `ALLOC_OK` | Placa → Planif (`uint32 dir_logica`) |
+| `74` | `ALLOC_ERROR` | Placa → Planif (vacío: no hay lugar en el Offload) |
+| `75` | `FREE` | Planif → Placa (`uint32 jid`, `uint32 dir_logica`) |
+| `76` | `CARGAR_PAGINA` | Planif → Placa (`uint32 jid`, `uint32 nro_pagina`; resolución del page fault) |
+| `77 – 80` | libres | Lectura, escritura y deslockeo usan `45 – 49` |
 | `81` | `CREAR_JOB_OK` | Placa → Planif (vacío) |
 | `82` | `CREAR_JOB_ERROR` | Placa → Planif (vacío; p. ej. el archivo no existe en `PATH_INSTRUCCIONES`) |
 | `83` | `FINALIZAR_JOB_OK` | Placa → Planif (vacío) |
+| `84` | `FREE_OK` | Placa → Planif (vacío) |
+| `85` | `CARGAR_PAGINA_OK` | Placa → Planif (vacío: la página ya está en memoria) |
 
-`CREAR_JOB` y `FINALIZAR_JOB` son **pedido-respuesta**: el Planificador mantiene tomado el mutex del
-socket de la Placa hasta leer la respuesta completa, incluido el payload vacío. `archivo_pseudocodigo`
-es **solo el nombre**, relativo al `PATH_INSTRUCCIONES` de la Placa.
+Todos son **pedido-respuesta**: el Planificador mantiene tomado el mutex del socket de la Placa hasta
+leer la respuesta completa, incluido el payload vacío. `archivo_pseudocodigo` es **solo el nombre**,
+relativo al `PATH_INSTRUCCIONES` de la Placa.
 
 ### Planificador ↔ Storage (100 – 129)
 
@@ -301,3 +345,4 @@ de mergear, porque del otro lado hay alguien leyendo esos campos en ese orden.
 | 2026-08-27 | Versión inicial. Header, tipos, handshake y mensajes del Check 1 definidos; rangos y op_codes de checks 2–4 reservados |
 | 2026-10-08 | **Cambia `INTERRUPCION`: de vacío a `uint32 jid`** (SIS-50 / SIS-48). Se documentan `FETCH_ERROR` (50), `CREAR_JOB_OK` / `CREAR_JOB_ERROR` / `FINALIZAR_JOB_OK` (81–83) y el payload de `FINALIZAR_JOB`, que ya estaban en el código |
 | 2026-10-09 | **Nuevos `SYSCALL_INIT_JOB` (20) y `SYSCALL_OK` (30)** (SIS-53 / SIS-47): primera syscall del Core al Planificador y su respuesta genérica |
+| 2026-10-15 | **Mensajes del Check 3** (SIS-56): `13`, `21–25`, `31–32` (Planif ↔ Core); `45–48`, `51–53` (Core/Planif ↔ Placa); `72–76`, `84–85` (Planif ↔ Placa). **Cambia `DESLOCKEAR_PAGINAS` (49)**: ahora tiene respuesta (`51`) y lo usa también el Planificador. Se liberan `77–80` |

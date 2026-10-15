@@ -46,9 +46,17 @@ typedef enum {
     // --- 10-39: Planificador <-> Core (Check 2) ---
     DISPATCH_JOB        = 10,
     DEVOLUCION_JOB      = 11,
-    INTERRUPCION        = 12,  // { uint32 jid } por el canal interrupt
-    SYSCALL_INIT_JOB    = 20,  // { uint32 jid (el que la pide), string archivo } por dispatch
-    SYSCALL_OK          = 30,  // vacío: respuesta a una syscall no bloqueante sin valor de retorno
+    INTERRUPCION        = 12,  
+    DEVOLUCION_PAGE_FAULT = 13,
+    SYSCALL_INIT_JOB    = 20,  
+    SYSCALL_ALLOC       = 21,
+    SYSCALL_FREE        = 22,
+    SYSCALL_LOAD_BATCH  = 23,
+    SYSCALL_LABEL       = 24,
+    SYSCALL_REPORT      = 25,
+    SYSCALL_OK          = 30,  
+    RESPUESTA_ALLOC     = 31,
+    SYSCALL_ERROR       = 32,
 
     // --- 40-69: Core <-> Placa (Check 3) ---
     FETCH_INSTRUCCION     = 40,
@@ -56,17 +64,30 @@ typedef enum {
     OBTENER_MARCO         = 42,
     RESPUESTA_MARCO       = 43,
     PAGE_FAULT            = 44,
+    LEER_MEMORIA          = 45,
+    RESPUESTA_LEER_MEMORIA = 46,
+    ESCRIBIR_MEMORIA      = 47,
+    ESCRIBIR_MEMORIA_OK   = 48,
     DESLOCKEAR_PAGINAS    = 49,
     FETCH_ERROR           = 50,
+    DESLOCKEO_OK          = 51,
+    OBTENER_TAM_PAGINA    = 52,
+    RESPUESTA_TAM_PAGINA  = 53,
 
 
     // --- 70-99: Planificador <-> Placa (Check 3) ---
     CREAR_JOB           = 70,
     FINALIZAR_JOB       = 71,
+    ALLOC               = 72,
+    ALLOC_OK            = 73,
+    ALLOC_ERROR         = 74,
+    FREE                = 75,
     CARGAR_PAGINA       = 76,
     CREAR_JOB_OK = 81,
     CREAR_JOB_ERROR = 82,
-    FINALIZAR_JOB_OK = 83
+    FINALIZAR_JOB_OK = 83,
+    FREE_OK             = 84,
+    CARGAR_PAGINA_OK    = 85
 
 } t_op_code;
 
