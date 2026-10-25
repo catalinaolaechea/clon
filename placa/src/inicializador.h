@@ -50,6 +50,8 @@ extern t_list* lista_jobs;
 extern pthread_mutex_t mutex_lista_core;
 extern pthread_mutex_t mutex_jobs;
 extern pthread_mutex_t mutex_memoria;
+extern pthread_mutex_t mutex_offload;
+
 
 typedef struct {
     int socket_core;
@@ -81,6 +83,9 @@ typedef struct {
 //array de cant_marcos
 extern t_marco* marcos;
 
+
+#define SLOT_SIN_ASIGNAR UINT32_MAX
+
 // tabla de paginas por job
 typedef struct {
     bool presente;
@@ -101,7 +106,8 @@ typedef struct {
 
 void inicializar_log();
 void inicializar_config();
-void inicializador_memoria();
+bool inicializar_memoria();
+bool validar_config();
 int marcos_libres();
 
 
