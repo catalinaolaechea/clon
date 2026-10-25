@@ -6,6 +6,7 @@
 // de instruccion): el mutex evita que se pisen.
 static pthread_mutex_t mutex_interrupcion = PTHREAD_MUTEX_INITIALIZER;
 static bool interrupcion_pendiente = false;
+static uint32_t jid_interrumpido = 0;   // JID que trajo la ultima INTERRUPCION
 
 static pthread_t hilo_interrupt;
 static bool hilo_iniciado = false;
@@ -22,13 +23,16 @@ static void* escuchar_interrupciones(void* arg) {
         // Siempre se lee el payload completo, para no desalinear el socket.
         t_buffer* buffer;
         if (recibir_buffer(fd_interrupt, &buffer) != CONEXION_OK) break;
-        eliminar_buffer(buffer);
 
-        if (op_code == INTERRUPCION) {
+        // INTERRUPCION = { uint32 jid }. Si el payload viniera corto no se lee: seria leer fuera del buffer.
+        if (op_code == INTERRUPCION && buffer->size >= sizeof(uint32_t)) {
+            uint32_t jid = buffer_read_uint32(buffer);
             pthread_mutex_lock(&mutex_interrupcion);
+            jid_interrumpido = jid;
             interrupcion_pendiente = true;
             pthread_mutex_unlock(&mutex_interrupcion);
         }
+        eliminar_buffer(buffer);
         // Cualquier otro op_code se ignora en este canal.
     }
     return NULL;
@@ -49,16 +53,14 @@ void detener_hilo_interrupt(void) {
     hilo_iniciado = false;
 }
 
-bool hay_interrupcion(void) {
+t_estado_interrupcion consumir_interrupcion(uint32_t jid_en_curso, uint32_t* jid_recibido) {
     pthread_mutex_lock(&mutex_interrupcion);
     bool hay = interrupcion_pendiente;
+    uint32_t jid = jid_interrumpido;
     interrupcion_pendiente = false;
     pthread_mutex_unlock(&mutex_interrupcion);
-    return hay;
-}
 
-void limpiar_interrupcion(void) {
-    pthread_mutex_lock(&mutex_interrupcion);
-    interrupcion_pendiente = false;
-    pthread_mutex_unlock(&mutex_interrupcion);
+    if (!hay) return INTERRUPCION_NINGUNA;
+    if (jid_recibido != NULL) *jid_recibido = jid;
+    return (jid == jid_en_curso) ? INTERRUPCION_PARA_ESTE_JOB : INTERRUPCION_DE_OTRO_JOB;
 }

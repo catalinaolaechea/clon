@@ -12,11 +12,23 @@ static const char* motivo_to_string(t_motivo_devolucion motivo) {
 }
 
 // CHECK INTERRUPT: va al final de cada ciclo que deja seguir al Job, nunca en el medio de una instruccion.
-static bool check_interrupt(void) {
-    if (!hay_interrupcion()) return false;
+// Una interrupcion que trae el JID de otro Job se descarta.
+static bool check_interrupt(uint32_t jid) {
+    uint32_t jid_recibido = 0;
 
-    log_info(core_logger, LOG_INTERRUPCION);
-    return true;
+    switch (consumir_interrupcion(jid, &jid_recibido)) {
+        case INTERRUPCION_PARA_ESTE_JOB:
+            log_info(core_logger, LOG_INTERRUPCION);
+            return true;
+
+        case INTERRUPCION_DE_OTRO_JOB:
+            log_info(core_logger, LOG_INTERRUPCION_DESCARTADA, identificador, jid_recibido, jid);
+            return false;
+
+        case INTERRUPCION_NINGUNA:
+        default:
+            return false;
+    }
 }
 
 t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
@@ -26,13 +38,12 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
         t_resultado_ciclo resultado = ejecutar_ciclo(jid, contexto, &pendiente);
 
         if (resultado == CICLO_CONTINUA) {
-            if (check_interrupt()) return MOTIVO_FIN_QUANTUM;
+            if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
             continue;
         }
 
         if (resultado == CICLO_ERROR) {
-            // El motivo ya quedo logueado en ejecutar_ciclo. Se devuelve el Job
-            // para no dejar al Planificador esperando a un Core que no responde.
+            // El motivo ya quedo logueado en ejecutar_ciclo. Se devuelve el Job y no deja esperando al Planificador
             log_error(core_logger, "Core %d: se aborta el Job %u por error en el ciclo (PC %u)", identificador, jid, contexto->pc);
             return MOTIVO_EXIT;
         }
@@ -56,12 +67,11 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
 
             if (!ok) return MOTIVO_EXIT;  // el motivo ya quedo logueado
 
-            contexto->pc++;  // ejecutar_ciclo no suma 1 en las no basicas: sin esto se repite el INIT_JOB
-            if (check_interrupt()) return MOTIVO_FIN_QUANTUM;
+            contexto->pc++;  // ejecutar_ciclo no suma 1 en las no basicas
+            if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
             continue;
         }
 
-        // TODO: syscalls (ALLOC, ...) e instrucciones de entrenamiento.
         log_error(core_logger, "Core %d: instruccion %s todavia no implementada (JID %u) - se finaliza el Job", identificador, pendiente->nombre, jid);
         destruir_instruccion(pendiente);
         return MOTIVO_EXIT;
@@ -93,9 +103,6 @@ static int atender_dispatch_job(t_buffer* buffer) {
     buffer_read_contexto(buffer, &contexto);
 
     log_info(core_logger, LOG_JOB_RECIBIDO, identificador, jid, contexto.pc);
-
-    // Una interrupcion que llego cuando no habia Job corriendo no es para este.
-    limpiar_interrupcion();
 
     t_motivo_devolucion motivo = ejecutar_job(jid, &contexto);
     return devolver_job(jid, &contexto, motivo);
