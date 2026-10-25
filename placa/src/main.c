@@ -14,8 +14,19 @@ int main(int argc, char* argv[]) {
 
     archivo_config = strdup(argv[1]);
 
-    inicializar_log();
     inicializar_config();
+    inicializar_log();
+    
+
+    if(!validar_config() || !inicializar_memoria()){
+        log_error(placa_logger, "Configuración invalidad, la placa no arranca");
+        log_destroy(placa_logger);
+        config_destroy(placa_config);
+        free(archivo_config);
+        return EXIT_FAILURE;
+
+    }
+
 
     lista_core = list_create();
     lista_jobs = list_create();
@@ -356,6 +367,18 @@ void* atender_core(void* args){
 
         }
 
+        case OBTENER_TAM_PAGINA:{
+            t_paquete* respuesta = crear_paquete(RESPUESTA_TAM_PAGINA);
+            buffer_add_uint32(respuesta->buffer, TAM_PAGINA);
+
+            if(enviar_paquete(socket_cliente, respuesta) != CONEXION_OK)
+                log_error(placa_logger,"No se pudo enviar el tamaño de pagina al Core %d", core->id_core);
+
+            eliminar_paquete(respuesta);
+
+            break;
+        }
+
         // [Enunciado pág. 23 - Lectura de datos] (Check 3)
         // Puede llegar del Core o del Planificador: JID, dirección física y tamaño a leer.
         // Se responde el contenido del rango pedido.
@@ -658,6 +681,9 @@ t_job_placa* crear_job(uint32_t jid, char** instrucciones, uint32_t cantidad){
     job->instrucciones = instrucciones;
     job->cant_instrucciones = cantidad;
 
+    job->tabla_paginas = list_create();
+    job->asignaciones = list_create();
+
     return job;
 
 }
@@ -717,6 +743,8 @@ void finalizar_job(uint32_t jid){
     }
 
     string_array_destroy(job->instrucciones);
+    list_destroy_and_destroy_elements(job->tabla_paginas,free);
+    list_destroy_and_destroy_elements(job->asignaciones, free);
     free(job);
 
     log_debug(placa_logger, "## JID: %u - Job Finalizado", jid);
