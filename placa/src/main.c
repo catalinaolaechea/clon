@@ -4,6 +4,7 @@
 #include "consola.h"
 #include "jobs.h"
 #include "memoria.h"
+#include "offload.h"
 
 static void* atender_cliente(void* socket);
 
@@ -25,15 +26,14 @@ int main(int argc, char* argv[]) {
     inicializar_log();
 
 
-    if(!validar_config() || !inicializar_memoria()){
-        log_error(placa_logger, "Configuración invalidad, la placa no arranca");
+    if(!validar_config() || !inicializar_memoria() || !inicializador_offload()){
+        log_error(placa_logger, "Configuración invalida, la placa no arranca");
         log_destroy(placa_logger);
         config_destroy(placa_config);
         free(archivo_config);
         return EXIT_FAILURE;
 
     }
-
 
     lista_core = list_create();
     lista_jobs = list_create();

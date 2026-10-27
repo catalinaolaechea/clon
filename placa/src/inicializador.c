@@ -66,6 +66,17 @@ bool validar_config(){
         ok = false;
     }
 
+    //validar TAM_OFFLOAD
+
+    if(TAM_OFFLOAD <=0){
+        log_error(placa_logger, "TAM_OFFLOAD=%d invalido: debe ser mayor a 0", TAM_OFFLOAD);
+        ok = false;
+    }else if(es_potencia_de_2(TAM_PAGINA) && TAM_OFFLOAD % TAM_PAGINA!=0){
+        log_error(placa_logger, "TAM_OFFLOAD=%d debe ser multiplo de TAM_PAGINA=%d",TAM_OFFLOAD,TAM_PAGINA);
+        ok = false;
+    }
+
+
     return ok;
 
 }
