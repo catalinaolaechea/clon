@@ -11,8 +11,6 @@ static const char* motivo_to_string(t_motivo_devolucion motivo) {
     }
 }
 
-// CHECK INTERRUPT: va al final de cada ciclo que deja seguir al Job, nunca en el medio de una instruccion.
-// Una interrupcion que trae el JID de otro Job se descarta.
 static bool check_interrupt(uint32_t jid) {
     uint32_t jid_recibido = 0;
 
@@ -31,7 +29,9 @@ static bool check_interrupt(uint32_t jid) {
     }
 }
 
-t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto) {
+t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* pagina_faltante) {
+
+    *pagina_faltante = 0;   // solo vale si se devuelve MOTIVO_PAGE_FAULT
 
     while (1) {
         t_instruccion* pendiente = NULL;
@@ -96,6 +96,24 @@ int devolver_job(uint32_t jid, t_contexto* contexto, t_motivo_devolucion motivo)
     return CONEXION_OK;
 }
 
+int devolver_page_fault(uint32_t jid, t_contexto* contexto, uint32_t nro_pagina) {
+    t_paquete* paquete = crear_paquete(DEVOLUCION_PAGE_FAULT);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_contexto(paquete->buffer, contexto);
+    buffer_add_uint32(paquete->buffer, nro_pagina);
+
+    int resultado = enviar_paquete(fd_planificador, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        log_error(core_logger, "Core %d: no se pudo devolver el Job %u por Page Fault al Planificador", identificador, jid);
+        return resultado;
+    }
+
+    log_info(core_logger, LOG_JOB_DEVUELTO, identificador, jid, contexto->pc, motivo_to_string(MOTIVO_PAGE_FAULT));
+    return CONEXION_OK;
+}
+
 // DISPATCH_JOB = { uint32 jid, contexto }. Ejecuta el Job y lo devuelve.
 static int atender_dispatch_job(t_buffer* buffer) {
     uint32_t jid = buffer_read_uint32(buffer);
@@ -104,7 +122,10 @@ static int atender_dispatch_job(t_buffer* buffer) {
 
     log_info(core_logger, LOG_JOB_RECIBIDO, identificador, jid, contexto.pc);
 
-    t_motivo_devolucion motivo = ejecutar_job(jid, &contexto);
+    uint32_t pagina_faltante = 0;
+    t_motivo_devolucion motivo = ejecutar_job(jid, &contexto, &pagina_faltante);
+
+    if (motivo == MOTIVO_PAGE_FAULT) return devolver_page_fault(jid, &contexto, pagina_faltante);
     return devolver_job(jid, &contexto, motivo);
 }
 
@@ -125,7 +146,7 @@ void esperar_dispatch(void) {
             return;
         }
 
-        // llega algo de verdad: se lee el payload completo
+        // Se lee el payload completo
         t_buffer* buffer;
         if (recibir_buffer(fd_planificador, &buffer) != CONEXION_OK) {
             log_error(core_logger, "Core %d: error recibiendo el payload del Planificador", identificador);

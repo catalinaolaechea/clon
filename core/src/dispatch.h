@@ -11,8 +11,10 @@
 
 void esperar_dispatch(void);
 
-t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto);
+t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* pagina_faltante);
 
 int devolver_job(uint32_t jid, t_contexto* contexto, t_motivo_devolucion motivo);
+
+int devolver_page_fault(uint32_t jid, t_contexto* contexto, uint32_t nro_pagina);
 
 #endif
