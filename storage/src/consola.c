@@ -8,6 +8,8 @@
 #include <stdbool.h>             
 #include <strings.h>             // para "strcasecmp" 
 #include <commons/string.h>      // funcionalidades de la commons para strings 
+#include <string.h>              // para "strlen" que cuenta los caracteres de un texto 
+#include "filesystem.h"          // para tener "STORAGE_DIR_BYTES_NOMBRE" una cte que dice cuantos bytes ocupa el nombre de una entrada del directorio (un "checkpoint" dentro del directorio, un indice del mismo que son 32 bytes dijos con 4 campos, ver en issue-24) 
 
 // aca vamos a plantear los usos correctos de cada comando, como deben venir seguidos de cuantos parametros cuando los escribamos en la terminal
 #define USO_INFO  "INFO"
@@ -16,9 +18,12 @@
 #define USO_WRITE "WRITE <CheckpointName> <hexaContent>"
 #define USO_RM    "RM <CheckpointName>"
 
+#define MAX_CARACTERES_NOMBRE (STORAGE_DIR_BYTES_NOMBRE - 1) // adecuandose a la cte de bytes de la entrada de un directorio, al nombre le alcanza como maximo 23 de esos 32 bytes, uno menos para contar con el "\0"
+
 // estos prototipos son porque en C una funcion tiene que estar declarada antes para que alguien la llame en las funciones que declaramos aca. Son "static" porque son privadas de este archivo 
 static void ejecutar_comando(char* linea);
 static bool cantidad_valida(char** palabras, int esperada, const char* uso); 
+static bool nombre_valido(const char* nombre);
 static void mostrar_comandos(void);
 static void comando_info(void);
 static void comando_ls(void);
@@ -89,6 +94,23 @@ static bool cantidad_valida(char** palabras, int esperada, const char* uso) {
    return true;  // caso que sea la cantidad esperada la dejamos pasar 
 }
 
+// recibe el nombre del checkpoint, devuelve true si sirve
+static bool nombre_valido(const char* nombre) {
+   if (nombre[0] == '\0') {  // miramos si el nombre es vacio
+      printf("Nombre de checkpoint invalido: no puede estar vacio\n");
+      return false;
+   }
+
+   size_t largo = strlen(nombre);  // conseguimos la longitud de dicho nombre 
+
+   if (largo > MAX_CARACTERES_NOMBRE) {  // comparamos que no se pase del maximo que vimos en esta constante que es 22 (por ahora, si en algun momento se cambia se adecua a cte que viene de filesystem)
+      printf("Nombre de checkpoint invalido: \"%s\" tiene %zu caracteres y el maximo es %d\n", nombre, largo, MAX_CARACTERES_NOMBRE);
+      return false;
+   }
+
+   return true;
+}
+
 // mostramos los posibles comandos con sus usos especificos 
 static void mostrar_comandos(void) {
    printf("Comandos disponibles:\n");
@@ -109,13 +131,28 @@ static void comando_ls(void) {
 }
 
 static void comando_cat(char** palabras) {
+   // solo agregamos una validacion en caso que el nombre no sea valido, justamente en aquellos comandos que deben venir de la mano con un nombre 
+   if (!nombre_valido(palabras[1])) { 
+      return;
+   }
+
    printf("CAT %s %s: pendiente (SIS-79)\n", palabras[1], palabras[2]);
 }
 
 static void comando_write(char** palabras) {
+   // lo mismo aca 
+   if (!nombre_valido(palabras[1])) {
+      return;
+   }
+
    printf("WRITE %s %s: pendiente (SIS-81)\n", palabras[1], palabras[2]);
 }
 
 static void comando_rm(char** palabras) {
+   // y aca 
+   if (!nombre_valido(palabras[1])) {
+      return;
+   }
+
    printf("RM %s: pendiente (SIS-81)\n", palabras[1]);
 }
