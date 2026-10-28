@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include "servidor_planificador.h"
 #include "filesystem.h"  // para dejar el volumen formateado antes de atender pedidos
+#include "consola.h"  //todo SIS-28, para que main reconozca nuestra consola del storage 
 
 #define STORAGE_ARCHIVO_LOG "runtime/storage.log"  // los archivos .log van en /runtime porque son artefactos que se generan al correr 
 
@@ -50,6 +51,15 @@ int main(int argc, char* argv[]) {  // "argc" = cantidad argumentos que vinieron
     //! 6) levantamos el servidor multihilo. Le pasamos el puerto que leimos del .config y el logger ya creado.
     // La funcion abre el socket, larga el hilo que acepta conexiones y nos devuelve el identificador de ese hilo
     pthread_t hilo_servidor = storage_servidor_iniciar(config->puerto_escucha, logger);
+
+    // todo SIS-28 
+    pthread_t hilo_consola;  // en esta variable vamos a guardar el hilo de la consola que creamos abajo 
+    // creamos el hilo con "phtread_create" con los atributos que pide la funcion de las commons, donde la guarda, siempre NULL, la funcion con la que el hilo empieza a correr y NULL, mira si es distinto de 0 (osea se creo bien)
+    if (pthread_create(&hilo_consola, NULL, storage_consola_atender, NULL) != STORAGE_HILO_CREADO) {
+        log_error(logger, "No se pudo crear el hilo de la consola: el Storage sigue andando, pero sin consola");  // si hubo un error mostramos en pantalla cual fue y lo guardamos en un log de errores
+    } else {
+        pthread_detach(hilo_consola); // en detach dejamos que lo limpie el sistema cuando termina el hilo, pq no nos "importa" y el main no se queda bloqueado esperando a que termine  
+    }
 
     //! 7) y aca nos quedamos clavados. El hilo de escucha tiene un "while(1)" adentro asi que nunca termina, y
     // ese es justamente el punto: si el main siguiera de largo llegaria al "return" de abajo, y cuando el hilo
