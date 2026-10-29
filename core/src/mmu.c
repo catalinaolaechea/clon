@@ -2,6 +2,10 @@
 
 static uint32_t tam_pagina_placa = 0;
 
+// true mientras el Core tenga paginas lockeadas en la Placa (las lockea cada OBTENER_MARCO exitoso
+// y las libera DESLOCKEAR_PAGINAS). Solo se usa desde el hilo principal: el unico que habla con la Placa.
+static bool hay_paginas_lockeadas = false;
+
 uint32_t tam_pagina(void) {
     return tam_pagina_placa;
 }
@@ -57,7 +61,7 @@ typedef enum {
 } t_resultado_marco;
 
 // OBTENER_MARCO = { jid, nro_pagina }. La Placa responde RESPUESTA_MARCO = { nro_marco }
-// (la pagina queda lockeada) o PAGE_FAULT = { jid, nro_pagina } si no esta en memoria.
+// (la pagina queda lockeada) o PAGE_FAULT = { jid, nro_pagina }
 static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* nro_marco, uint32_t* pagina_faltante) {
     t_paquete* paquete = crear_paquete(OBTENER_MARCO);
     buffer_add_uint32(paquete->buffer, jid);
@@ -86,6 +90,7 @@ static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t
 
     if (op_code == RESPUESTA_MARCO && buffer->size >= sizeof(uint32_t)) {
         *nro_marco = buffer_read_uint32(buffer);
+        hay_paginas_lockeadas = true;                       // la Placa lockeo la pagina
         res = MARCO_OK;
 
     } else if (op_code == PAGE_FAULT && buffer->size >= 2 * sizeof(uint32_t)) {
@@ -186,10 +191,152 @@ bool deslockear_paginas(uint32_t jid) {
         return false;
     }
 
+    hay_paginas_lockeadas = false;
     return true;
+}
+
+bool liberar_paginas_del_ciclo(uint32_t jid) {
+    if (!hay_paginas_lockeadas) return true;   // nada que liberar: no se molesta a la Placa
+    return deslockear_paginas(jid);
 }
 
 bool atender_page_fault(uint32_t jid, uint32_t nro_pagina) {
     log_info(core_logger, LOG_PAGE_FAULT, jid, nro_pagina);
     return deslockear_paginas(jid);
+}
+
+// LEER_MEMORIA = { jid, dir_fisica, tamanio }. La Placa responde RESPUESTA_LEER_MEMORIA = { bloque }.
+static bool leer_pedazo(uint32_t jid, const t_direccion_fisica* pedazo, void* destino) {
+    log_info(core_logger, LOG_ACCESO_MEMORIA, jid, "Lectura", pedazo->direccion, pedazo->tamanio);
+
+    t_paquete* paquete = crear_paquete(LEER_MEMORIA);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, pedazo->direccion);
+    buffer_add_uint32(paquete->buffer, pedazo->tamanio);
+    int resultado = enviar_paquete(fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        log_error(core_logger, "Core %d: no se pudo pedir la lectura de memoria (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+
+    uint8_t op_code;
+    if (recibir_operacion(fd_placa, &op_code) != CONEXION_OK) {
+        log_error(core_logger, "Core %d: la Placa no respondio la lectura (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+
+    t_buffer* buffer;
+    if (recibir_buffer(fd_placa, &buffer) != CONEXION_OK) {
+        log_error(core_logger, "Core %d: respuesta incompleta a la lectura (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+
+    bool ok = false;
+
+    if (op_code == RESPUESTA_LEER_MEMORIA) {
+        // El bloque es { uint32 tamanio, bytes }: se verifica que traiga justo lo pedido antes de copiar.
+        uint32_t declarado = 0;
+        if (buffer->size >= sizeof(uint32_t)) memcpy(&declarado, buffer->stream, sizeof(uint32_t));
+
+        if (declarado == pedazo->tamanio && buffer->size == sizeof(uint32_t) + declarado) {
+            uint32_t recibido;
+            void* datos = buffer_read_bloque(buffer, &recibido);
+            memcpy(destino, datos, recibido);
+            free(datos);
+            ok = true;
+        } else {
+            log_error(core_logger, "Core %d: la Placa devolvio un bloque de tamanio inesperado (JID %u, direccion %u): pedi %u", identificador, jid, pedazo->direccion, pedazo->tamanio);
+        }
+    } else {
+        log_error(core_logger, "Core %d: respuesta inesperada a la lectura (JID %u, direccion %u): op_code %u", identificador, jid, pedazo->direccion, op_code);
+    }
+
+    eliminar_buffer(buffer);
+    return ok;
+}
+
+// ESCRIBIR_MEMORIA = { jid, dir_fisica, bloque }. La Placa responde ESCRIBIR_MEMORIA_OK (vacio).
+static bool escribir_pedazo(uint32_t jid, const t_direccion_fisica* pedazo, const void* datos) {
+    log_info(core_logger, LOG_ACCESO_MEMORIA, jid, "Escritura", pedazo->direccion, pedazo->tamanio);
+
+    t_paquete* paquete = crear_paquete(ESCRIBIR_MEMORIA);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, pedazo->direccion);
+    buffer_add_bloque(paquete->buffer, (void*) datos, pedazo->tamanio);
+    int resultado = enviar_paquete(fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        log_error(core_logger, "Core %d: no se pudo pedir la escritura de memoria (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+
+    uint8_t op_code;
+    if (recibir_operacion(fd_placa, &op_code) != CONEXION_OK) {
+        log_error(core_logger, "Core %d: la Placa no confirmo la escritura (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+
+    t_buffer* buffer;
+    if (recibir_buffer(fd_placa, &buffer) != CONEXION_OK) {
+        log_error(core_logger, "Core %d: respuesta incompleta a la escritura (JID %u, direccion %u)", identificador, jid, pedazo->direccion);
+        return false;
+    }
+    eliminar_buffer(buffer);
+
+    if (op_code != ESCRIBIR_MEMORIA_OK) {
+        log_error(core_logger, "Core %d: respuesta inesperada a la escritura (JID %u, direccion %u): op_code %u", identificador, jid, pedazo->direccion, op_code);
+        return false;
+    }
+
+    return true;
+}
+
+bool leer_memoria(uint32_t jid, t_list* direcciones, void** contenido, uint32_t* tamanio) {
+    *contenido = NULL;
+    *tamanio = 0;
+
+    uint64_t total = 0;
+    for (int i = 0; i < list_size(direcciones); i++) {
+        total += ((t_direccion_fisica*) list_get(direcciones, i))->tamanio;
+    }
+
+    if (total > UINT32_MAX) {
+        log_error(core_logger, "Core %d: lectura demasiado grande (JID %u): %lu bytes", identificador, jid, (unsigned long) total);
+        return false;
+    }
+    if (total == 0) return true;
+
+    uint8_t* datos = malloc(total);
+    uint32_t escrito = 0;
+
+    for (int i = 0; i < list_size(direcciones); i++) {
+        t_direccion_fisica* pedazo = list_get(direcciones, i);
+
+        if (!leer_pedazo(jid, pedazo, datos + escrito)) {
+            free(datos);
+            return false;
+        }
+        escrito += pedazo->tamanio;
+    }
+
+    *contenido = datos;
+    *tamanio = (uint32_t) total;
+    return true;
+}
+
+bool escribir_memoria(uint32_t jid, t_list* direcciones, const void* contenido) {
+    const uint8_t* datos = contenido;
+    uint32_t leido = 0;
+
+    for (int i = 0; i < list_size(direcciones); i++) {
+        t_direccion_fisica* pedazo = list_get(direcciones, i);
+
+        if (!escribir_pedazo(jid, pedazo, datos + leido)) return false;
+        leido += pedazo->tamanio;
+    }
+
+    return true;
 }
