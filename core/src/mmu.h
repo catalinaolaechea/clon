@@ -25,5 +25,14 @@ t_resultado_traduccion traducir_rango(uint32_t jid, uint32_t dir_logica, uint32_
 
 bool deslockear_paginas(uint32_t jid);
 bool atender_page_fault(uint32_t jid, uint32_t nro_pagina);
+/*
+Log obligatorio de cada acceso a memoria, uno por cada pedazo [dir_fisica; tamanio]:
+"## JID: <JID> - Acción: <Lectura/Escritura> - Dirección Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
+*/
+#define LOG_ACCESO_MEMORIA "##JID: %u - Acción: %s - Dirección Física: %u - Tamaño: %u"
+
+bool leer_memoria(uint32_t jid, t_list* direcciones, void** contenido, uint32_t* tamanio);
+
+bool escribir_memoria(uint32_t jid, t_list* direcciones, const void* contenido);
 
 #endif
