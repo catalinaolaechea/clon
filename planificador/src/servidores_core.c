@@ -211,6 +211,9 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
         case DEVOLUCION_JOB:
             recibir_devolucion(identificador, buffer);
             break;
+        case DEVOLUCION_PAGE_FAULT:
+            recibir_devolucion_page_fault(identificador, buffer);
+            break;
         default:
             log_warning(planificador_logger, "Codigo de operacion desconocido recibido: %u", op_code);
     }
