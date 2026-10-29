@@ -96,6 +96,25 @@ bool sacar_pcb_de_cola(t_pcb* pcb) {
     return sacado;
 }
 
+// El Job del Core caido lo pueden querer sacar de EXEC dos hilos a la vez: el del Core y el corto plazo.
+// Gana el primero que lo reclama: le pone core_asignado en -1 y el otro ya no lo encuentra.
+t_pcb* reclamar_job_en_exec(uint32_t jid, int identificador_core) {
+    t_pcb* reclamado = NULL;
+    pthread_mutex_lock(&mutex_estados);
+
+    for (int i = 0; i < list_size(colas_estados[ESTADO_EXEC]); i++) {
+        t_pcb* pcb = list_get(colas_estados[ESTADO_EXEC], i);
+        if (pcb->jid == jid && pcb->core_asignado == identificador_core) {
+            pcb->core_asignado = -1;
+            reclamado = pcb;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_estados);
+    return reclamado;
+}
+
 // Sirve para recorrer una cola sin tener el mutex tomado todo ese tiempo
 t_list* copiar_cola(t_estado estado) {
     pthread_mutex_lock(&mutex_estados);
