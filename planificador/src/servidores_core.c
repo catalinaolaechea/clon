@@ -250,7 +250,7 @@ static void* atender_core(void* ctx) {
 
     if (tenia_job) {
         log_info(planificador_logger, "El Core %d se desconecto ejecutando el Job %u", identificador, jid_en_ejecucion);
-        // TODO: el Job tiene que volver a READY y hay que pedirle a la Placa el deslockeo de sus paginas
+        recuperar_job_de_core_caido(jid_en_ejecucion, identificador);
     }
 
     return NULL;
