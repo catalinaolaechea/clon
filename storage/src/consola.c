@@ -6,6 +6,9 @@
 #include <readline/readline.h>   // readline(): pide una linea con prompt, edicion y flechitas
 #include <readline/history.h>    // add_history(): guarda la linea para recuperarla despues
 #include <stdbool.h>             
+#include <stdint.h>              // trae "uint32_t" (entero sin signo de 32bits) y "UNIT32_MAX" (el valor mas grande que entra en enteros de 32bits, unos 4 millones) 
+#include <ctype.h>               // trae "isdigit" que dice si un caracter es un digito del 0 al 9 
+#include <errno.h>               // trae "errno" q es una variable global donde las funciones dejan anotado que error paso 
 #include <strings.h>             // para "strcasecmp" 
 #include <commons/string.h>      // funcionalidades de la commons para strings 
 #include <string.h>              // para "strlen" que cuenta los caracteres de un texto 
@@ -24,6 +27,7 @@
 static void ejecutar_comando(char* linea);
 static bool cantidad_valida(char** palabras, int esperada, const char* uso); 
 static bool nombre_valido(const char* nombre);
+static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad);
 static void mostrar_comandos(void);
 static void comando_info(void);
 static void comando_ls(void);
@@ -111,6 +115,36 @@ static bool nombre_valido(const char* nombre) {
    return true;
 }
 
+// agregamos esta funcion que la necesitamos para poder ejecutar el comando de CAT, el comando seria algo como "CAT modelo7 12abc" en el parametro texto va a recibir "12abc" y evaluarlo 
+static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad) {
+   if (!isdigit((unsigned char) texto[0])) {  // primero como base miramos que NO arranque con un digito 
+      printf("cantBytes invalido: \"%s\" no es un numero entero positivo\n", texto);  
+      return false;
+   }
+
+   char* fin;
+   errno = 0;
+   unsigned long valor = strtoul(texto, &fin, 10);  // agarramos el texto y lo convertimos a base10 con "strtoul()", y el puntero "fin" guarda el ultimo caracter que leimos
+
+   if (*fin != '\0') {  // si no leyo hasta el final, osea que fin no guardo el ultimo caracter este
+      printf("cantBytes invalido: \"%s\" no es un numero entero positivo\n", texto);
+      return false;
+   }
+
+   if (errno == ERANGE || valor > UINT32_MAX) {  // si errno posiblemente guardo un numero que no entraba en "unsigned long" osea es muy grande, o si no entro en el maximo de 32bits 
+      printf("cantBytes invalido: \"%s\" es demasiado grande (maximo %u)\n", texto, UINT32_MAX);
+      return false;
+   }
+
+   if (valor == 0) {
+      printf("cantBytes invalido: tiene que ser mayor a 0\n");
+      return false;
+   }
+
+   *cantidad = (uint32_t) valor;  // en cantidad que es valida la guardamos en esta variable, y si llega a darse que lo leimos en 64bits lo achicamos a 32bits 
+   return true;
+}
+
 // mostramos los posibles comandos con sus usos especificos 
 static void mostrar_comandos(void) {
    printf("Comandos disponibles:\n");
@@ -136,7 +170,13 @@ static void comando_cat(char** palabras) {
       return;
    }
 
-   printf("CAT %s %s: pendiente (SIS-79)\n", palabras[1], palabras[2]);
+   uint32_t cantidad;
+
+   if (!cantidad_bytes_valida(palabras[2], &cantidad)) {  // hacemos uso de la funcion que definimos para ver si la cantidad de bytes leida en las cadena spliteada es valida 
+      return;
+   }
+
+   printf("CAT %s %u bytes: pendiente (SIS-79)\n", palabras[1], cantidad);
 }
 
 static void comando_write(char** palabras) {
