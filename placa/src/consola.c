@@ -9,10 +9,6 @@
 static void procesar_comando(char* linea);
 static void comando_info();
 static void comando_tls();
-static void comando_crear(char** args);
-static void comando_finalizar(char** args);
-static void comando_fetch(char** args);
-
 
 // [Enunciado pág. 23-24 - Comandos locales]
 // La Placa implementa una consola por stdin con los comandos INFO y TLS, que responden en formato
@@ -39,70 +35,11 @@ static void procesar_comando(char* linea){
         comando_info();
     }else if(strcmp(args[0],"TLS") ==0){
         comando_tls();
-    }
-
-    else if(strcmp(args[0], "CREAR") == 0){
-        comando_crear(args);
-    }else if(strcmp(args[0], "FINALIZAR") == 0){
-        comando_finalizar(args);
-    }else if(strcmp(args[0], "FETCH") == 0){
-        comando_fetch(args);
-    }
-
-    else {
+    }else {
         printf("Comando desconocido: %s\n",args[0]);
     }
 
     string_array_destroy(args);
-}
-
-
-// debug: CREAR <jid> <archivo> -> igual que el CREAR_JOB del Planificador
-static void comando_crear(char** args){
-    if (string_array_size(args) != 3) {
-        printf("Uso: CREAR <jid> <archivo>\n");
-        return;
-    }
-
-    uint32_t jid = strtoul(args[1], NULL, 10);
-    t_job_placa* job = inicializar_job(jid, args[2]);
-
-    if (job != NULL)
-        printf("Job %u creado con %u instrucciones\n", jid, job->cant_instrucciones);
-    else
-        printf("No se pudo crear el Job %u\n", jid);
-}
-
-// debug: FETCH <jid> <pc> -> igual que el FETCH_INSTRUCCION del Core, pero sin red
-static void comando_fetch(char** args){
-    if (string_array_size(args) != 3) {
-        printf("Uso: FETCH <jid> <pc>\n");
-        return;
-    }
-
-    uint32_t jid = strtoul(args[1], NULL, 10);
-    uint32_t pc  = strtoul(args[2], NULL, 10);
-
-    int motivo_error = -1;
-    char* instruccion = obtener_instruccion(jid, pc, &motivo_error);
-
-    if (instruccion != NULL) {
-        printf("JID %u - PC %u: %s\n", jid, pc, instruccion);
-        free(instruccion);
-    } else if (motivo_error == FETCH_ERROR_JID_INEXISTENTE)
-        printf("JID %u inexistente\n", jid);
-    else
-        printf("PC %u fuera de rango\n", pc);
-}
-
-// debug: FINALIZAR <jid> -> igual que el FINALIZAR_JOB del Planificador
-static void comando_finalizar(char** args){
-    if (string_array_size(args) != 2) {
-        printf("Uso: FINALIZAR <jid>\n");
-        return;
-    }
-
-    finalizar_job(strtoul(args[1], NULL, 10));
 }
 
 // [Enunciado pág. 23 - Comandos locales: INFO]

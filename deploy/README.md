@@ -212,16 +212,10 @@ Comandos de la consola de la placa (`Placa>`):
 |---|---|
 | `INFO` | estado de la memoria (enunciado) |
 | `TLS` | Jobs registrados (enunciado) |
-| `CREAR <jid> <archivo>` | crea un Job como si lo pidiera el planificador (debug). Ej: `CREAR 1 individuales/05_loop.asm` |
-| `FETCH <jid> <pc>` | pide una instrucción como si fuera el core (debug). Ej: `FETCH 1 0` |
-| `FINALIZAR <jid>` | finaliza un Job (debug) |
 
 **Para salir:** la placa **no** se corta con `Ctrl+C`. Cerrá esa terminal (en VS Code, el
 ícono de la papelera) o corré `make bajar` desde **otra** terminal. Los otros módulos sí se
 cortan con `Ctrl+C`.
-
-Para un test automático de la placa por consola (Fetch, crear, finalizar...):
-`./deploy/local/test_placa.sh`.
 
 ---
 
@@ -346,8 +340,7 @@ deploy/
 ├── local/                       todo en esta PC
 │   ├── 01_instrucciones.sh …    un script por prueba (make prueba)
 │   ├── probar.sh                cualquier prueba por nombre o número
-│   ├── modulo.sh                un solo módulo en primer plano (make modulo)
-│   └── test_placa.sh            test automático de la placa por consola
+│   └── modulo.sh                un solo módulo en primer plano (make modulo)
 ├── distribuido/                 cada PC levanta algunos módulos (make deploy)
 │   ├── 01_instrucciones.sh …
 │   └── levantar.sh
