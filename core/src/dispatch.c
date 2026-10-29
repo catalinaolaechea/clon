@@ -1,5 +1,6 @@
 #include "dispatch.h"
 #include "syscalls.h"
+#include "mmu.h"
 
 static const char* motivo_to_string(t_motivo_devolucion motivo) {
     switch (motivo) {
@@ -38,6 +39,7 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* p
         t_resultado_ciclo resultado = ejecutar_ciclo(jid, contexto, &pendiente);
 
         if (resultado == CICLO_CONTINUA) {
+            if (!liberar_paginas_del_ciclo(jid)) return MOTIVO_EXIT;   // fin del ciclo: nada lockeado
             if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
             continue;
         }
@@ -68,6 +70,7 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* p
             if (!ok) return MOTIVO_EXIT;  // el motivo ya quedo logueado
 
             contexto->pc++;  // ejecutar_ciclo no suma 1 en las no basicas
+            if (!liberar_paginas_del_ciclo(jid)) return MOTIVO_EXIT;   // fin del ciclo: nada lockeado
             if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
             continue;
         }
@@ -124,6 +127,10 @@ static int atender_dispatch_job(t_buffer* buffer) {
 
     uint32_t pagina_faltante = 0;
     t_motivo_devolucion motivo = ejecutar_job(jid, &contexto, &pagina_faltante);
+
+    // Antes de devolver el Job no puede quedar nada lockeado. La unica excepcion son las syscalls de
+    // servicio (COR-13): dejan las paginas lockeadas hasta que el Planificador termina el servicio.
+    if (motivo != MOTIVO_SYSCALL_BLOQUEANTE && !liberar_paginas_del_ciclo(jid)) motivo = MOTIVO_EXIT;
 
     if (motivo == MOTIVO_PAGE_FAULT) return devolver_page_fault(jid, &contexto, pagina_faltante);
     return devolver_job(jid, &contexto, motivo);

@@ -2,6 +2,10 @@
 
 static uint32_t tam_pagina_placa = 0;
 
+// true mientras el Core tenga paginas lockeadas en la Placa (las lockea cada OBTENER_MARCO exitoso
+// y las libera DESLOCKEAR_PAGINAS). Solo se usa desde el hilo principal: el unico que habla con la Placa.
+static bool hay_paginas_lockeadas = false;
+
 uint32_t tam_pagina(void) {
     return tam_pagina_placa;
 }
@@ -57,7 +61,7 @@ typedef enum {
 } t_resultado_marco;
 
 // OBTENER_MARCO = { jid, nro_pagina }. La Placa responde RESPUESTA_MARCO = { nro_marco }
-// (la pagina queda lockeada) o PAGE_FAULT = { jid, nro_pagina } 
+// (la pagina queda lockeada) o PAGE_FAULT = { jid, nro_pagina }
 static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* nro_marco, uint32_t* pagina_faltante) {
     t_paquete* paquete = crear_paquete(OBTENER_MARCO);
     buffer_add_uint32(paquete->buffer, jid);
@@ -86,6 +90,7 @@ static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t
 
     if (op_code == RESPUESTA_MARCO && buffer->size >= sizeof(uint32_t)) {
         *nro_marco = buffer_read_uint32(buffer);
+        hay_paginas_lockeadas = true;                       // la Placa lockeo la pagina
         res = MARCO_OK;
 
     } else if (op_code == PAGE_FAULT && buffer->size >= 2 * sizeof(uint32_t)) {
@@ -186,14 +191,19 @@ bool deslockear_paginas(uint32_t jid) {
         return false;
     }
 
+    hay_paginas_lockeadas = false;
     return true;
+}
+
+bool liberar_paginas_del_ciclo(uint32_t jid) {
+    if (!hay_paginas_lockeadas) return true;   // nada que liberar: no se molesta a la Placa
+    return deslockear_paginas(jid);
 }
 
 bool atender_page_fault(uint32_t jid, uint32_t nro_pagina) {
     log_info(core_logger, LOG_PAGE_FAULT, jid, nro_pagina);
     return deslockear_paginas(jid);
 }
-
 
 // LEER_MEMORIA = { jid, dir_fisica, tamanio }. La Placa responde RESPUESTA_LEER_MEMORIA = { bloque }.
 static bool leer_pedazo(uint32_t jid, const t_direccion_fisica* pedazo, void* destino) {

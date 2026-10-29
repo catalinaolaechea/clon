@@ -25,6 +25,11 @@ t_resultado_traduccion traducir_rango(uint32_t jid, uint32_t dir_logica, uint32_
 
 bool deslockear_paginas(uint32_t jid);
 bool atender_page_fault(uint32_t jid, uint32_t nro_pagina);
+
+// ningun Job sale del Core, ni termina un ciclo, con paginas lockeadas. Devuelve false si fallo el deslockeo (queda logueado).
+bool liberar_paginas_del_ciclo(uint32_t jid);
+
+
 /*
 Log obligatorio de cada acceso a memoria, uno por cada pedazo [dir_fisica; tamanio]:
 "## JID: <JID> - Acción: <Lectura/Escritura> - Dirección Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
