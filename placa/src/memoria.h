@@ -40,6 +40,13 @@ typedef struct {
     uint32_t tamanio;
 }t_asignacion;
 
+typedef enum {
+    MARCO_OK,
+    MARCO_PAGE_FAULT,
+    MARCO_JID_INEXISTENTE,
+    MARCO_PAGINA_NO_ASIGNADA
+} t_resultado_marco;
+
 
 bool inicializar_memoria();
 int marcos_libres();
@@ -50,12 +57,9 @@ void retardo_memoria();
 // Se llama con mutex_memoria tomado.
 void registrar_acceso(t_entrada_pagina* entrada);
 
-// [Enunciado pág. 23 - Obtención de marco] Devuelve el op_code con el que responderle al Core:
-//   RESPUESTA_MARCO -> en *marco queda el número de marco y la página quedó lockeada
-//   PAGE_FAULT      -> la página es del Job pero no está en memoria (no se toca nada)
-//   MARCO_ERROR     -> en *motivo queda el t_marco_error
-// Toma los mutex adentro.
-uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* motivo);
+// [Enunciado pág. 23 - Obtención de marco] Si devuelve MARCO_OK, en *marco queda el número de marco
+// y la página quedó lockeada. Toma los mutex adentro.
+t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco);
 
 
 // [Enunciado pág. 23 - Deslockeo de páginas] Saca el lock de TODAS las páginas del Job.

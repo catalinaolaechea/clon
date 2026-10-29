@@ -77,9 +77,9 @@ static bool pagina_asignada(t_job_placa* job, uint32_t nro_pagina){
 // [Enunciado pág. 23 - Obtención de marco]
 // La pide la MMU del Core. Presente -> devuelve el marco y la página queda lockeada.
 // No presente -> PAGE_FAULT sin tocar nada de la tabla (criterio 2 de SIS-59).
-uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* motivo){
+t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco){
 
-    uint8_t respuesta;
+    t_resultado_marco resultado;
 
     pthread_mutex_lock(&mutex_jobs); //nadie finalice el job mientras se usa
 
@@ -89,15 +89,13 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
 
         if(job == NULL){
             //job no existe
-            *motivo = MARCO_ERROR_JID_INEXISTENTE;
-            respuesta = MARCO_ERROR;
+            resultado = MARCO_JID_INEXISTENTE;
         
         }else if(!pagina_asignada(job,nro_pagina) || nro_pagina >= (uint32_t)list_size(job->tabla_paginas) ){
             //la pagina no esta en ningun alloc del job
             // el segundo chequeo es por seguridad, que no se pase al final de la tabla
 
-            *motivo = MARCO_ERROR_PAGINA_NO_ASIGNADA;
-            respuesta = MARCO_ERROR;
+            resultado = MARCO_PAGINA_NO_ASIGNADA;
 
         }else {
             // indice de la pagina = numero de pagina
@@ -105,7 +103,7 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
 
             if(!entrada->presente){
                 //es el job pero no esta en memoria, no se toca nada
-                respuesta = PAGE_FAULT;
+                resultado = MARCO_PAGE_FAULT;
             } else {
                 
                 entrada->lockeada = true;
@@ -117,7 +115,7 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
                 *marco = entrada->marco;
                 //el marco vuelve por el puntero
 
-                respuesta = RESPUESTA_MARCO;
+                resultado = MARCO_OK;
 
             }
         }
@@ -126,7 +124,7 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
     
     pthread_mutex_unlock(&mutex_jobs);
 
-    return respuesta;
+    return resultado;
 
 
 

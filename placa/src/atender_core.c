@@ -148,28 +148,38 @@ void* atender_core(void* args){
             uint32_t jid    = buffer_read_uint32(payload);
             uint32_t pagina = buffer_read_uint32(payload);
 
-            uint32_t marco = 0;      
-            int motivo     = -1;     
+            uint32_t marco = 0;
 
-            uint8_t op_respuesta = obtener_marco(jid, pagina, &marco, &motivo);
+            t_resultado_marco resultado = obtener_marco(jid, pagina, &marco);
 
-            retardo_memoria();      
+            retardo_memoria();
 
-            t_paquete* respuesta = crear_paquete(op_respuesta);
+            t_paquete* respuesta;
 
-            if(op_respuesta == RESPUESTA_MARCO){
+            switch(resultado){
+            case MARCO_OK:
                 // la página está en memoria (y quedó lockeada): se manda su marco
+                respuesta = crear_paquete(RESPUESTA_MARCO);
                 buffer_add_uint32(respuesta->buffer, marco);
+                break;
 
-            } else if(op_respuesta == PAGE_FAULT){
+            case MARCO_PAGE_FAULT:
                 // no está en memoria: el contrato pide jid y página
+                respuesta = crear_paquete(PAGE_FAULT);
                 buffer_add_uint32(respuesta->buffer, jid);
                 buffer_add_uint32(respuesta->buffer, pagina);
+                break;
 
-            } else {
-                // MARCO_ERROR: el motivo viaja adentro, igual que en FETCH_ERROR
-                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %d", jid, pagina, motivo);
+            default: {
+                // OBTENER_MARCO_ERROR: el motivo viaja adentro, igual que en FETCH_ERROR
+                uint32_t motivo = (resultado == MARCO_JID_INEXISTENTE)
+                                  ? MARCO_ERROR_JID_INEXISTENTE
+                                  : MARCO_ERROR_PAGINA_NO_ASIGNADA;
+                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %u", jid, pagina, motivo);
+                respuesta = crear_paquete(OBTENER_MARCO_ERROR);
                 buffer_add_uint32(respuesta->buffer, motivo);
+                break;
+            }
             }
 
             int validar = enviar_paquete(socket_cliente, respuesta);
