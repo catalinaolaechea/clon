@@ -260,8 +260,9 @@ una instrucción.
 | `52` | `OBTENER_TAM_PAGINA` | Core → Placa | ✔ vacío. Se pide una vez, apenas termina el handshake |
 | `53` | `RESPUESTA_TAM_PAGINA` | Placa → Core | ✔ `uint32 tam_pagina` |
 | `54` | `OBTENER_MARCO_ERROR` | Placa → Core | ✔ `uint32 motivo`: `0` JID inexistente, `1` página no asignada (`t_marco_error`) |
+| `55` | `MEMORIA_ERROR` | Placa → Core/Planif | ✔ `uint32 motivo`: `0` fuera de rango, `1` cruza de marco, `2` marco ajeno (`t_memoria_error`) |
 
-**`45 – 49` y `51` también los usa el Planificador.** Leer, escribir y deslockear son la misma
+**`45 – 49`, `51` y `55` también los usa el Planificador.** Leer, escribir y deslockear son la misma
 operación para la Placa venga de quien venga (pág. 23): un solo `case` y un solo serializador. Es la
 única excepción a "un rango por par de módulos".
 
@@ -272,6 +273,11 @@ Un pedido de lectura o escritura **no cruza de página**: el que pide ya lo part
 (queda lockeada), `PAGE_FAULT` si es del Job pero no está cargada, o `OBTENER_MARCO_ERROR` si el pedido es
 inválido: el JID no existe o la página no pertenece a ninguna asignación (`ALLOC`) del Job. El Core
 trata `OBTENER_MARCO_ERROR` igual que `FETCH_ERROR`: finaliza el Job.
+
+**`LEER_MEMORIA` y `ESCRIBIR_MEMORIA` responden `MEMORIA_ERROR` si el pedido es inválido**, en vez
+de su respuesta normal: la dirección no existe o el tamaño es 0 (`0`), el rango se pasa del final del
+marco (`1`), o el marco no está ocupado por ese Job (`2`). El que pidió lo trata igual que
+`FETCH_ERROR`: finaliza el Job.
 
 **`DESLOCKEAR_PAGINAS` tiene respuesta** para garantizar el orden: sin ella, el Core podría mandar el
 próximo `OBTENER_MARCO` antes de que la Placa procese el deslockeo, y un reemplazo elegiría la víctima
@@ -353,3 +359,4 @@ de mergear, porque del otro lado hay alguien leyendo esos campos en ese orden.
 | 2026-10-09 | **Nuevos `SYSCALL_INIT_JOB` (20) y `SYSCALL_OK` (30)** (SIS-53 / SIS-47): primera syscall del Core al Planificador y su respuesta genérica |
 | 2026-10-15 | **Mensajes del Check 3** (SIS-56): `13`, `21–25`, `31–32` (Planif ↔ Core); `45–48`, `51–53` (Core/Planif ↔ Placa); `72–76`, `84–85` (Planif ↔ Placa). **Cambia `DESLOCKEAR_PAGINAS` (49)**: ahora tiene respuesta (`51`) y lo usa también el Planificador. Se liberan `77–80` |
 | 2026-10-29 | **Nuevo `OBTENER_MARCO_ERROR` (54)** (SIS-59): respuesta de error a `OBTENER_MARCO`, con `uint32 motivo` (`t_marco_error`), igual que `FETCH_ERROR` |
+| 2026-10-29 | **Nuevo `MEMORIA_ERROR` (55)** (SIS-60): respuesta de error a `LEER_MEMORIA` / `ESCRIBIR_MEMORIA`, con `uint32 motivo` (`t_memoria_error`). Lo reciben el Core y el Planificador |
