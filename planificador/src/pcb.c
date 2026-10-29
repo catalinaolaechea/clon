@@ -87,6 +87,15 @@ void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguien
     }
 }
 
+// La estimacion nueva mezcla la rafaga que acaba de terminar con la estimacion anterior:
+// S = alfa * rafaga real + (1 - alfa) * S anterior
+static void recalcular_estimacion(t_pcb* pcb) {
+    double alfa = config_planificador.hrrn_alfa;
+    double rafaga_real = temporal_gettime(pcb->rafaga_actual);  // en ms, igual que ESTIMACION_INICIAL
+
+    pcb->estimacion_rafaga = alfa * rafaga_real + (1 - alfa) * pcb->estimacion_rafaga;
+}
+
 // La espera cuenta desde la ultima vez que entro a READY y la rafaga desde la ultima vez que entro a EXEC
 void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguiente) {
     if (anterior == ESTADO_READY) {
@@ -95,6 +104,7 @@ void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguie
 
     if (anterior == ESTADO_EXEC) {
         temporal_stop(pcb->rafaga_actual);
+        recalcular_estimacion(pcb);
     }
 
     if (siguiente == ESTADO_READY) {

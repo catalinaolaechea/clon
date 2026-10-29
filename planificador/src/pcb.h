@@ -52,6 +52,7 @@ void pcb_destruir(t_pcb* pcb);
 void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguiente);
 
 // Para HRRN: pone en 0 la espera al entrar a READY y la rafaga al entrar a EXEC, y las frena al salir.
+// Al salir de EXEC recalcula la estimacion de la proxima rafaga con HRRN_ALFA.
 void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguiente);
 
 #endif
