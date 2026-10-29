@@ -88,3 +88,79 @@ bool inicializador_offload(){
     
 
 }
+
+
+// [Enunciado pág. 22 - El Offload] + [pág. 25 - RETARDO_OFFLOAD]
+// Copia una página (TAM_PAGINA bytes) desde "origen" al slot indicado del archivo.
+
+bool escribir_pagina_offload(uint32_t slot, void* origen){
+
+    //un slot fuera de rango escribiria mas alla del final del archivo
+    if(slot >= cant_slots){
+        log_error(placa_logger, "Offload - Escritura en slot inexistente: %u (hay %u)", slot, cant_slots);
+        return false;
+    }
+
+    // dónde empieza el slot dentro del archivo: slot 0 -> byte 0, slot 1 -> byte 64, ...
+    // el (off_t) evita que la multiplicación desborde un int si el Offload es grande
+    off_t posicion = (off_t)slot * TAM_PAGINA;
+
+    //un solo acceso al Offload a la vez 
+    pthread_mutex_lock(&mutex_offload);
+
+        log_debug(placa_logger, "Offload - Escritura - Slot: %u - inicio", slot);
+
+        // simula que el disco es lento; va adentro del mutex para que el siguiente espere también esto
+        usleep(RETARDO_OFFLOAD * 1000);
+
+        // escribe TAM_PAGINA bytes de "origen" en el archivo, a partir de "posicion"
+        // pwrite devuelve cuántos bytes escribió, o -1 si falló
+        ssize_t escritos = pwrite(archivo_offload, origen, TAM_PAGINA, posicion);
+
+        log_debug(placa_logger, "Offload - Escritura - Slot: %u - fin", slot);
+
+    pthread_mutex_unlock(&mutex_offload);
+
+    // si no se escribió la página entera, se avisa con el motivo
+    if(escritos != TAM_PAGINA){
+        log_error(placa_logger, "Offload - No se pudo escribir el slot %u: %s", slot, strerror(errno));
+        return false;
+    }
+
+    return true;
+
+}
+
+//Copia una página (TAM_PAGINA bytes) desde el slot indicado del archivo hacia "destino".
+//"destino" tiene que tener lugar para TAM_PAGINA bytes.
+//es lo mismo que escribir
+bool leer_pagina_offload(uint32_t slot, void* destino){
+
+    if(slot >= cant_slots){
+        log_error(placa_logger, "Offload - Lectura de slot inexistente: %u (hay %u)", slot, cant_slots);
+        return false;
+    }
+
+    off_t posicion = (off_t)slot * TAM_PAGINA;
+
+    // un solo acceso al Offload a la vez
+    pthread_mutex_lock(&mutex_offload);
+
+        log_debug(placa_logger, "Offload - Lectura - Slot: %u - inicio", slot);
+
+        usleep(RETARDO_OFFLOAD * 1000);
+
+        ssize_t leidos = pread(archivo_offload, destino, TAM_PAGINA, posicion);
+
+        log_debug(placa_logger, "Offload - Lectura - Slot: %u - fin", slot);
+
+    pthread_mutex_unlock(&mutex_offload);
+
+    if(leidos != TAM_PAGINA){
+        log_error(placa_logger, "Offload - No se pudo leer el slot %u: %s", slot, strerror(errno));
+        return false;
+    }
+
+    return true;
+}
+
