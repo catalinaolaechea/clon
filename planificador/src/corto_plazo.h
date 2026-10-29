@@ -1,7 +1,7 @@
 #ifndef CORTO_PLAZO_H
 #define CORTO_PLAZO_H
 
-#define LOG_PRIORIDAD_HRRN "## (%u) - Prioridad HRRN calculada: %.2f - Estimacion proxima rafaga: %.2f"
+#define LOG_PRIORIDAD_HRRN "## (%u) - Prioridad HRRN calculada: %.4f - Estimacion proxima rafaga: %.2f"
 
 void inicializar_corto_plazo(void);
 void destruir_corto_plazo(void);
