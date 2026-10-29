@@ -4,8 +4,7 @@ t_list* lista_jobs;
 
 pthread_mutex_t mutex_jobs = PTHREAD_MUTEX_INITIALIZER;
 
-
-static t_job_placa* buscar_job(uint32_t jid_buscado){
+t_job_placa* buscar_job(uint32_t jid_buscado){
 
     bool el_jid(void* elemento){
         t_job_placa* job = (t_job_placa*) elemento;
