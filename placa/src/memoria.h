@@ -50,5 +50,12 @@ void retardo_memoria();
 // Se llama con mutex_memoria tomado.
 void registrar_acceso(t_entrada_pagina* entrada);
 
+// [Enunciado pág. 23 - Obtención de marco] Devuelve el op_code con el que responderle al Core:
+//   RESPUESTA_MARCO -> en *marco queda el número de marco y la página quedó lockeada
+//   PAGE_FAULT      -> la página es del Job pero no está en memoria (no se toca nada)
+//   MARCO_ERROR     -> en *motivo queda el t_marco_error
+// Toma los mutex adentro.
+uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* motivo);
+
 
 #endif
