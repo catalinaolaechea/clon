@@ -2,8 +2,7 @@
 
 static uint32_t tam_pagina_placa = 0;
 
-// true mientras el Core tenga paginas lockeadas en la Placa (las lockea cada OBTENER_MARCO exitoso
-// y las libera DESLOCKEAR_PAGINAS). Solo se usa desde el hilo principal: el unico que habla con la Placa.
+// true: Core tiene paginas lockeadas en la Placa 
 static bool hay_paginas_lockeadas = false;
 
 uint32_t tam_pagina(void) {
@@ -11,7 +10,7 @@ uint32_t tam_pagina(void) {
 }
 
 bool obtener_tam_pagina(void) {
-    t_paquete* paquete = crear_paquete(OBTENER_TAM_PAGINA);   // payload vacio
+    t_paquete* paquete = crear_paquete(OBTENER_TAM_PAGINA);   
     int resultado = enviar_paquete(fd_placa, paquete);
     eliminar_paquete(paquete);
 
@@ -54,6 +53,14 @@ bool obtener_tam_pagina(void) {
     return true;
 }
 
+static const char* motivo_marco_error_to_string(uint32_t motivo) {
+    switch (motivo) {
+        case MARCO_ERROR_JID_INEXISTENTE:    return "el JID no existe";
+        case MARCO_ERROR_PAGINA_NO_ASIGNADA: return "la pagina no pertenece a ninguna asignacion del Job";
+        default:                             return "motivo desconocido";
+    }
+}
+
 typedef enum {
     MARCO_OK,
     MARCO_PAGE_FAULT,
@@ -90,13 +97,18 @@ static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t
 
     if (op_code == RESPUESTA_MARCO && buffer->size >= sizeof(uint32_t)) {
         *nro_marco = buffer_read_uint32(buffer);
-        hay_paginas_lockeadas = true;                       // la Placa lockeo la pagina
+        hay_paginas_lockeadas = true;                       
         res = MARCO_OK;
 
     } else if (op_code == PAGE_FAULT && buffer->size >= 2 * sizeof(uint32_t)) {
-        buffer_read_uint32(buffer);                         // jid: es el nuestro
-        *pagina_faltante = buffer_read_uint32(buffer);      // la pagina que dice la Placa
+        buffer_read_uint32(buffer);                         
+        *pagina_faltante = buffer_read_uint32(buffer);      
         res = MARCO_PAGE_FAULT;
+
+    } else if (op_code == OBTENER_MARCO_ERROR && buffer->size >= sizeof(uint32_t)) {
+        uint32_t motivo = buffer_read_uint32(buffer);
+        log_error(core_logger, "Core %d: la Placa no pudo dar el marco de la pagina %u (JID %u): %s", identificador, nro_pagina, jid, motivo_marco_error_to_string(motivo));
+        // res queda en MARCO_ERROR: el Job se finaliza, igual que con FETCH_ERROR
 
     } else {
         log_error(core_logger, "Core %d: respuesta inesperada al pedir el marco de la pagina %u (JID %u): op_code %u", identificador, nro_pagina, jid, op_code);
@@ -106,8 +118,7 @@ static t_resultado_marco pedir_marco(uint32_t jid, uint32_t nro_pagina, uint32_t
     return res;
 }
 
-t_resultado_traduccion traducir_rango(uint32_t jid, uint32_t dir_logica, uint32_t tamanio,
-                                      t_list** direcciones, uint32_t* pagina_faltante) {
+t_resultado_traduccion traducir_rango(uint32_t jid, uint32_t dir_logica, uint32_t tamanio, t_list** direcciones, uint32_t* pagina_faltante) {
     *direcciones = NULL;
 
     if (tam_pagina_placa == 0) {
@@ -129,7 +140,6 @@ t_resultado_traduccion traducir_rango(uint32_t jid, uint32_t dir_logica, uint32_
         uint32_t nro_pagina     = dir_actual / tam_pagina_placa;
         uint32_t desplazamiento = dir_actual % tam_pagina_placa;
 
-        // Cuanto del rango entra en ESTA pagina: lo que queda de pagina o lo que falta, lo menor.
         uint32_t en_esta_pagina = tam_pagina_placa - desplazamiento;
         uint32_t bytes = (restante < en_esta_pagina) ? restante : en_esta_pagina;
 
