@@ -110,6 +110,24 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
     return false;
 }
 
+bool core_sigue_con_job(int identificador, uint32_t jid, uint32_t numero_despacho) {
+    pthread_mutex_lock(&mutex_cores);
+
+    bool sigue = false;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (core->identificador == identificador) {
+            sigue = !core->libre && core->jid == jid && core->numero_despacho == numero_despacho
+                    && core->fd_dispatch != -1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+    return sigue;
+}
+
 bool liberar_core(int identificador, uint32_t jid) {
     pthread_mutex_lock(&mutex_cores);
 
