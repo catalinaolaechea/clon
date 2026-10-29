@@ -6,8 +6,10 @@
 #include "jobs.h"
 #include "syscalls.h"
 #include "cliente_placa.h"
+#include "page_fault.h"
 
 #define DEVOLUCION_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint8_t))
+#define DEVOLUCION_PAGE_FAULT_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint32_t))
 
 // Libera el Core y guarda el contexto en la PCB. NULL si la devolucion no corresponde y se descarta.
 static t_pcb* recibir_job_de_core(int identificador_core, uint32_t jid, t_contexto* contexto) {
@@ -58,6 +60,29 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
         default:
             log_warning(planificador_logger, "Job %u devuelto con motivo %u, todavia no soportado", jid, motivo);
     }
+}
+
+void recibir_devolucion_page_fault(int identificador_core, t_buffer* buffer) {
+    if (buffer->size != DEVOLUCION_PAGE_FAULT_SIZE) {
+        log_error(planificador_logger, "DEVOLUCION_PAGE_FAULT mal formada del Core %d: %u bytes", identificador_core, buffer->size);
+        return;
+    }
+
+    uint32_t jid = buffer_read_uint32(buffer);
+    t_contexto contexto;
+    buffer_read_contexto(buffer, &contexto);
+    uint32_t nro_pagina = buffer_read_uint32(buffer);
+
+    t_pcb* pcb = recibir_job_de_core(identificador_core, jid, &contexto);
+    if (pcb == NULL) return;
+
+    log_debug(planificador_logger, "DEVOLUCION_PAGE_FAULT JID %u <- Core %d | PC=%u - Pagina: %u", jid, identificador_core, contexto.pc, nro_pagina);
+
+    pcb->estadisticas.cantidad_page_faults++;
+
+    // primero BLOCKED y despues encolar: si no, el hilo de Page Faults podria pasarlo a READY desde EXEC
+    cambiar_estado(pcb, ESTADO_BLOCKED);
+    encolar_page_fault(pcb, nro_pagina);
 }
 
 void recuperar_job_de_core_caido(uint32_t jid, int identificador_core) {
