@@ -49,6 +49,7 @@ void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente) {
 
     pcb->estado = estado_siguiente;
     pcb_actualizar_estadisticas(pcb, estado_anterior, estado_siguiente);  // bajo el mismo mutex que el cambio
+    pcb_actualizar_planificacion(pcb, estado_anterior, estado_siguiente);
 
     // Agregar el PCB a la nueva cola de estado
     list_add(colas_estados[estado_siguiente], pcb);

@@ -8,6 +8,12 @@ static void temporal_create_and_stop(t_temporal** temporal) {
     temporal_stop(*temporal);
 }
 
+// t_temporal no se puede poner en 0: se tira el viejo y se arranca uno nuevo
+static void reiniciar_cronometro(t_temporal** temporal) {
+    temporal_destroy(*temporal);
+    *temporal = temporal_create();
+}
+
 static void inicializar_tiempos(t_estadisticas* estadisticas) {
     estadisticas->tiempo_total = temporal_create();
     estadisticas->tiempo_new = temporal_create();
@@ -78,5 +84,24 @@ void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguien
 
     if (siguiente == ESTADO_EXIT) {
         temporal_stop(estadisticas->tiempo_total);
+    }
+}
+
+// La espera cuenta desde la ultima vez que entro a READY y la rafaga desde la ultima vez que entro a EXEC
+void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguiente) {
+    if (anterior == ESTADO_READY) {
+        temporal_stop(pcb->espera_en_ready);
+    }
+
+    if (anterior == ESTADO_EXEC) {
+        temporal_stop(pcb->rafaga_actual);
+    }
+
+    if (siguiente == ESTADO_READY) {
+        reiniciar_cronometro(&pcb->espera_en_ready);
+    }
+
+    if (siguiente == ESTADO_EXEC) {
+        reiniciar_cronometro(&pcb->rafaga_actual);
     }
 }
