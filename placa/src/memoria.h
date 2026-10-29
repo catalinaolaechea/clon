@@ -58,4 +58,9 @@ void registrar_acceso(t_entrada_pagina* entrada);
 uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* motivo);
 
 
+// [Enunciado pág. 23 - Deslockeo de páginas] Saca el lock de TODAS las páginas del Job.
+// Devuelve false si el JID no existe. Toma los mutex adentro.
+bool deslockear_paginas(uint32_t jid);
+
+
 #endif

@@ -133,5 +133,40 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
 
 }
 
+// [Enunciado pág. 23 - Deslockeo de páginas]
+// Saca el lock de TODAS las páginas del Job: sus marcos vuelven a poder ser víctimas de reemplazo.
+// Llamarla dos veces no hace nada malo (idempotente).
+bool deslockear_paginas(uint32_t jid){
+
+    pthread_mutex_lock(&mutex_jobs);   
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_job_placa* job = buscar_job(jid);
+
+        // se guarda ANTES de soltar los mutex
+        bool existe = (job != NULL);
+
+        if(existe){
+
+            // función interna: le saca el lock a una entrada
+            void sacar_lock(void* elemento){
+                t_entrada_pagina* entrada = elemento;
+                entrada->lockeada = false;
+            }
+            // la aplica a todas las páginas del Job
+            list_iterate(job->tabla_paginas, sacar_lock);
+        }
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    return existe;
+    
+}
+
+
+
+
+
 
 
