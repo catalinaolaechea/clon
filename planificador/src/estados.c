@@ -95,3 +95,13 @@ bool sacar_pcb_de_cola(t_pcb* pcb) {
     pthread_mutex_unlock(&mutex_estados);
     return sacado;
 }
+
+// Sirve para recorrer una cola sin tener el mutex tomado todo ese tiempo
+t_list* copiar_cola(t_estado estado) {
+    pthread_mutex_lock(&mutex_estados);
+
+    t_list* copia = list_duplicate(colas_estados[estado]);
+
+    pthread_mutex_unlock(&mutex_estados);
+    return copia;
+}
