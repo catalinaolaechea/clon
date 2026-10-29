@@ -32,9 +32,10 @@ uint32_t crear_job(char* archivo_pseudocodigo) {
 
 static char* motivo_finalizacion_to_string(t_motivo_finalizacion motivo) {
     switch (motivo) {
-        case FINALIZACION_EXIT:            return "EXIT";
-        case FINALIZACION_ERROR_CREAR_JOB: return "ERROR_CREAR_JOB";
-        default:                           return "DESCONOCIDO";
+        case FINALIZACION_EXIT:               return "EXIT";
+        case FINALIZACION_ERROR_CREAR_JOB:    return "ERROR_CREAR_JOB";
+        case FINALIZACION_ERROR_CARGA_PAGINA: return "ERROR_CARGA_PAGINA";
+        default:                              return "DESCONOCIDO";
     }
 }
 

@@ -5,6 +5,7 @@
 #include "jobs.h"
 #include "largo_plazo.h"
 #include "corto_plazo.h"
+#include "page_fault.h"
 
 int main(int argc, char* argv[]) {
     
@@ -27,17 +28,20 @@ int main(int argc, char* argv[]) {
 
     inicializar_largo_plazo();
     inicializar_corto_plazo();  // antes de arrancar el largo plazo y el servidor: los dos le avisan
+    inicializar_page_faults();  // antes del servidor: los hilos de los Cores le encolan
 
     crear_job(path_job_inicial);
 
     iniciar_largo_plazo();
     iniciar_corto_plazo();
+    iniciar_page_faults();
 
     pthread_t hilo_servidor = iniciar_servidor_cores();
 
     pthread_join(hilo_servidor, NULL);
     destruir_largo_plazo();
     destruir_corto_plazo();
+    destruir_page_faults();
     destruir_estados(); 
     log_destroy(planificador_logger);
     config_destroy(planificador_config);

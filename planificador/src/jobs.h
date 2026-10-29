@@ -11,7 +11,8 @@
 
 typedef enum {
     FINALIZACION_EXIT,             // el Job ejecuto la syscall EXIT
-    FINALIZACION_ERROR_CREAR_JOB   // la Placa no pudo crear el Job (ej. el archivo no existe)
+    FINALIZACION_ERROR_CREAR_JOB,  // la Placa no pudo crear el Job (ej. el archivo no existe)
+    FINALIZACION_ERROR_CARGA_PAGINA  // la Placa no pudo cargar la pagina de un Page Fault
 } t_motivo_finalizacion;
 
 uint32_t crear_job(char* archivo_pseudocodigo);

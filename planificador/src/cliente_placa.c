@@ -141,3 +141,50 @@ bool placa_deslockear_paginas(uint32_t jid) {
 
     return true;
 }
+
+// mutex_placa queda tomado mientras la Placa carga: puede tardar RETARDO_OFFLOAD x 2 si baja una victima
+bool placa_cargar_pagina(uint32_t jid, uint32_t nro_pagina) {
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(CARGAR_PAGINA);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, nro_pagina);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar CARGAR_PAGINA de la pagina %u del JID %u a la Placa", nro_pagina, jid);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio CARGAR_PAGINA de la pagina %u del JID %u", nro_pagina, jid);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio CARGAR_PAGINA de la pagina %u del JID %u", nro_pagina, jid);
+        return false;
+    }
+
+    eliminar_buffer(buffer);  // CARGAR_PAGINA_OK viene vacio, pero hay que sacarlo del socket
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+
+    if (op_code != CARGAR_PAGINA_OK) {
+        log_error(planificador_logger, "La Placa respondio %u a CARGAR_PAGINA de la pagina %u del JID %u", op_code, nro_pagina, jid);
+        return false;
+    }
+
+    return true;
+}

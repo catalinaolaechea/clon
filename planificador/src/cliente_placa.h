@@ -11,4 +11,7 @@ bool placa_finalizar_job(uint32_t jid);
 // Pide a la Placa que deslockee todas las paginas del Job y espera DESLOCKEO_OK.
 bool placa_deslockear_paginas(uint32_t jid);
 
+// Pide a la Placa que cargue esa pagina del Job (atencion del Page Fault) y espera CARGAR_PAGINA_OK.
+bool placa_cargar_pagina(uint32_t jid, uint32_t nro_pagina);
+
 #endif
