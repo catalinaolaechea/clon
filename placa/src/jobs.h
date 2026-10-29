@@ -27,4 +27,7 @@ void finalizar_job(uint32_t jid);
 // queda el t_fetch_error correspondiente.
 char* obtener_instruccion(uint32_t jid, uint32_t pc, int* motivo_error);
 
+// Busca el Job en lista_jobs. Devuelve NULL si no existe.
+t_job_placa* buscar_job(uint32_t jid_buscado);
+
 #endif

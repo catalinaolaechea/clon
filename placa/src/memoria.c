@@ -1,4 +1,5 @@
 #include "memoria.h"
+#include "jobs.h" //buscar_job
 
 //memoria fisica
 void* memoria = NULL;
@@ -8,6 +9,9 @@ int cant_marcos = 0;
 t_marco* marcos = NULL;
 
 pthread_mutex_t mutex_memoria = PTHREAD_MUTEX_INITIALIZER;
+
+//Reloj logico para LRU, cada acceso a una pagina le suma 1 y la pagina guarda ese valor
+static uint64_t contador_accesos = 0;
 
 
 bool inicializar_memoria(){
@@ -40,3 +44,127 @@ int marcos_libres(){
 void retardo_memoria(){
     usleep(RETARDO_MEMORIA*1000);
 }
+
+// [Enunciado pág. 22 - Reemplazo de páginas]
+// Anota un acceso a la página para que LRU y CLOK-M puedan elegir victima
+
+void registrar_acceso(t_entrada_pagina* entrada){
+    //avanza el reloj logico, este acceso es el mas de todos
+    contador_accesos++;
+
+    //LRU, esta pagina se uso en el instante contador_acceso
+    entrada->ultimo_acceso=contador_accesos;
+
+    //CLOCK-M bit de uso en 1, el algoritmo lo vuevleve a 0 cuando pasa el puntero
+    entrada->uso = true;
+}
+
+
+//la pagina cae dentor de alguna asignación (alloc) del job ?, se llama mutex_jobs
+
+static bool pagina_asignada(t_job_placa* job, uint32_t nro_pagina){
+
+    //funcion interna
+    bool contiene_pagina(void* elemento){
+        t_asignacion* asignacion = elemento;
+        return nro_pagina >= asignacion->pagina_inicio                               // desde la primera
+            && nro_pagina <  asignacion->pagina_inicio + asignacion->cant_paginas;   // hasta la última
+    }
+
+    return list_any_satisfy(job->asignaciones, contiene_pagina);
+}
+
+// [Enunciado pág. 23 - Obtención de marco]
+// La pide la MMU del Core. Presente -> devuelve el marco y la página queda lockeada.
+// No presente -> PAGE_FAULT sin tocar nada de la tabla (criterio 2 de SIS-59).
+t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco){
+
+    t_resultado_marco resultado;
+
+    pthread_mutex_lock(&mutex_jobs); //nadie finalice el job mientras se usa
+
+    pthread_mutex_lock(&mutex_memoria); // nadie toque entradas ni marcos
+
+        t_job_placa* job = buscar_job(jid);
+
+        if(job == NULL){
+            //job no existe
+            resultado = MARCO_JID_INEXISTENTE;
+        
+        }else if(!pagina_asignada(job,nro_pagina) || nro_pagina >= (uint32_t)list_size(job->tabla_paginas) ){
+            //la pagina no esta en ningun alloc del job
+            // el segundo chequeo es por seguridad, que no se pase al final de la tabla
+
+            resultado = MARCO_PAGINA_NO_ASIGNADA;
+
+        }else {
+            // indice de la pagina = numero de pagina
+            t_entrada_pagina* entrada = list_get(job->tabla_paginas, nro_pagina);
+
+            if(!entrada->presente){
+                //es el job pero no esta en memoria, no se toca nada
+                resultado = MARCO_PAGE_FAULT;
+            } else {
+                
+                entrada->lockeada = true;
+                //ya no puede ser victima de reemplazo
+
+                registrar_acceso(entrada);
+                //uso + ultimo acceso
+
+                *marco = entrada->marco;
+                //el marco vuelve por el puntero
+
+                resultado = MARCO_OK;
+
+            }
+        }
+
+    pthread_mutex_unlock(&mutex_memoria); 
+    
+    pthread_mutex_unlock(&mutex_jobs);
+
+    return resultado;
+
+
+
+
+}
+
+// [Enunciado pág. 23 - Deslockeo de páginas]
+// Saca el lock de TODAS las páginas del Job: sus marcos vuelven a poder ser víctimas de reemplazo.
+// Llamarla dos veces no hace nada malo (idempotente).
+bool deslockear_paginas(uint32_t jid){
+
+    pthread_mutex_lock(&mutex_jobs);   
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_job_placa* job = buscar_job(jid);
+
+        // se guarda ANTES de soltar los mutex
+        bool existe = (job != NULL);
+
+        if(existe){
+
+            // función interna: le saca el lock a una entrada
+            void sacar_lock(void* elemento){
+                t_entrada_pagina* entrada = elemento;
+                entrada->lockeada = false;
+            }
+            // la aplica a todas las páginas del Job
+            list_iterate(job->tabla_paginas, sacar_lock);
+        }
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    return existe;
+    
+}
+
+
+
+
+
+
+

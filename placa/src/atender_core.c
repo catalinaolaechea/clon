@@ -144,26 +144,77 @@ void* atender_core(void* args){
         //  - si la página está residente, se responde el número de marco y la página queda lockeada;
         //  - si no está residente, se responde que ocurrió un Page Fault.
         case OBTENER_MARCO:{
-            break;
 
+            uint32_t jid    = buffer_read_uint32(payload);
+            uint32_t pagina = buffer_read_uint32(payload);
+
+            uint32_t marco = 0;
+
+            t_resultado_marco resultado = obtener_marco(jid, pagina, &marco);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            switch(resultado){
+            case MARCO_OK:
+                // la página está en memoria (y quedó lockeada): se manda su marco
+                respuesta = crear_paquete(RESPUESTA_MARCO);
+                buffer_add_uint32(respuesta->buffer, marco);
+                break;
+
+            case MARCO_PAGE_FAULT:
+                // no está en memoria: el contrato pide jid y página
+                respuesta = crear_paquete(PAGE_FAULT);
+                buffer_add_uint32(respuesta->buffer, jid);
+                buffer_add_uint32(respuesta->buffer, pagina);
+                break;
+
+            default: {
+                // OBTENER_MARCO_ERROR: el motivo viaja adentro, igual que en FETCH_ERROR
+                uint32_t motivo = (resultado == MARCO_JID_INEXISTENTE)
+                                  ? MARCO_ERROR_JID_INEXISTENTE
+                                  : MARCO_ERROR_PAGINA_NO_ASIGNADA;
+                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %u", jid, pagina, motivo);
+                respuesta = crear_paquete(OBTENER_MARCO_ERROR);
+                buffer_add_uint32(respuesta->buffer, motivo);
+                break;
+            }
+            }
+
+            int validar = enviar_paquete(socket_cliente, respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder OBTENER_MARCO al Core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
+            break;
         }
 
-        /*case RESPUESTA_MARCO:{
-            break;
-
-        }*/
-
-        // PAGE_FAULT es una RESPUESTA de la Placa al Core (dentro de la obtención de marco), no un
-        // pedido que el Core le mande a la Placa. Ver docs/protocolo.md, op_code 44.
-        case PAGE_FAULT:{
-            break;
-
-        }
         // [Enunciado pág. 23 - Deslockeo de páginas] (Check 3)
         // El Core la envía al terminar con éxito cada ciclo de instrucción, o al devolverle el Job
         // al Planificador (por ejemplo, tras un Page Fault). Se recibe el JID y se liberan los
         // locks de TODAS sus páginas, para que sus marcos vuelvan a poder ser víctimas de reemplazo.
         case DESLOCKEAR_PAGINAS:{
+
+            uint32_t jid = buffer_read_uint32(payload);
+
+            if(!deslockear_paginas(jid))
+                log_warning(placa_logger, "DESLOCKEAR PAGINAS de un JID inexistente %u",jid);
+                
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(DESLOCKEO_OK);
+            
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder DESLOCKEO_OK al core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
+
             break;
 
         }
