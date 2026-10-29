@@ -2,6 +2,7 @@
 #include "conexiones.h"
 #include "dispatch.h"
 #include "interrupcion.h"
+#include "mmu.h"
 
 int main(int argc, char* argv[]) {
 
@@ -20,6 +21,8 @@ int main(int argc, char* argv[]) {
 
     conectar_a_planificador_y_placa();
     conectar_canal_interrupt();   // segundo socket a Planificador, para interrupciones
+    if (!obtener_tam_pagina()) 
+        exit(EXIT_FAILURE);
     iniciar_hilo_interrupt();     // hilo que escucha ese socket
 
     esperar_dispatch();
