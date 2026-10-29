@@ -132,7 +132,7 @@ void finalizar_job(uint32_t jid){
 // [Enunciado pág. 16 - Core / Fetch] + [pág. 21 - Memoria de Instrucciones]
 // El PC es el número de instrucción relativo al Job (PC = 0 es la primera línea).
 // Si el JID no existe o el PC se pasa del final no hay instrucción: se devuelve NULL con el
-// motivo (SIS-40). La usan el FETCH_INSTRUCCION del Core y el comando FETCH de la consola.
+// motivo (SIS-40). La usa el FETCH_INSTRUCCION del Core.
 char* obtener_instruccion(uint32_t jid, uint32_t pc, int* motivo_error){
 
     char* instruccion = NULL;

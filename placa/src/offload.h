@@ -4,7 +4,6 @@
 #include "inicializador.h"
 #include <commons/bitarray.h>
 
-
 //offload
 extern int archivo_offload;
 extern t_bitarray* slots_offload;
