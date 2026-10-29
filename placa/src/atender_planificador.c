@@ -154,9 +154,28 @@ void* atender_planificador(void* planificador){
         //   "## JID: <JID> - Bajada al Offload - Página: <NRO_PÁGINA>"
         //   "## Reemplazo - Marco: <NRO_MARCO> - JID Víctima: <JID> - Página Víctima: <NRO_PÁGINA>"
         case CARGAR_PAGINA:{
+
             break;
 
         }
+
+        case DESLOCKEAR_PAGINAS:{
+            uint32_t jid = buffer_read_uint32(payload);
+
+            if(!deslockear_paginas(jid))
+                log_warning(placa_logger, "DESLOCKEAR_PAGINAS de un JID inexistente: %u", jid);
+
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(DESLOCKEO_OK);
+
+            if(enviar_paquete(socket_cliente, respuesta) != CONEXION_OK)
+                log_error(placa_logger, "No se pudo responder DESLOCKEO_OK al Planificador");
+
+            eliminar_paquete(respuesta);
+            break;
+        }
+
         default:
             log_warning(placa_logger, "Operación desconocida recibida del PLANIFICADOR: %d", operacion_planificador);
             break;

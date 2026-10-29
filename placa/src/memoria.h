@@ -63,4 +63,6 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
 bool deslockear_paginas(uint32_t jid);
 
 
+
+
 #endif

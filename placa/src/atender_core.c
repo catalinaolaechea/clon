@@ -164,6 +164,25 @@ void* atender_core(void* args){
         // al Planificador (por ejemplo, tras un Page Fault). Se recibe el JID y se liberan los
         // locks de TODAS sus páginas, para que sus marcos vuelvan a poder ser víctimas de reemplazo.
         case DESLOCKEAR_PAGINAS:{
+
+            uint32_t jid = buffer_read_uint32(payload);
+
+            if(!deslockear_paginas(jid))
+                log_warning(placa_logger, "DESLOCKEAR PAGINAS de un JID inexistente %u",jid);
+            break;
+
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(DESLOCKEO_OK);
+            
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder DESLOCKEO_OK al core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
+
             break;
 
         }
