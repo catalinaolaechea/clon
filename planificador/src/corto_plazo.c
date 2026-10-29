@@ -8,6 +8,7 @@
 #include "quantum.h"
 
 #define ERROR_SEM_INIT -1
+#define ESTIMACION_MINIMA_MS 1.0  // para no dividir por 0 si la estimacion llega a 0
 
 static sem_t sem_jobs_en_ready;
 static sem_t sem_cores_libres;
@@ -16,15 +17,52 @@ static t_pcb* elegir_job_fifo(void) {
     return primer_pcb_de_cola(ESTADO_READY);
 }
 
+// (W + S) / S: W es lo que lleva esperando en READY y S la estimacion de su proxima rafaga, en ms
+static double response_ratio(t_pcb* pcb) {
+    double espera = temporal_gettime(pcb->espera_en_ready);
+    double estimacion = pcb->estimacion_rafaga;
+
+    if (estimacion < ESTIMACION_MINIMA_MS) {
+        estimacion = ESTIMACION_MINIMA_MS;
+    }
+
+    return (espera + estimacion) / estimacion;
+}
+
+// Loguea el ratio de cada Job de READY y devuelve el de mayor ratio. La cola esta en orden de
+// llegada y se compara con '>', asi que en un empate gana el que llego antes.
+static t_pcb* elegir_job_hrrn(void) {
+    t_list* ready = copiar_cola(ESTADO_READY);
+
+    t_pcb* elegido = NULL;
+    double mayor_ratio = 0;
+
+    for (int i = 0; i < list_size(ready); i++) {
+        t_pcb* pcb = list_get(ready, i);
+        double ratio = response_ratio(pcb);
+
+        log_info(planificador_logger, LOG_PRIORIDAD_HRRN, pcb->jid, ratio, pcb->estimacion_rafaga);
+
+        if (elegido == NULL || ratio > mayor_ratio) {
+            elegido = pcb;
+            mayor_ratio = ratio;
+        }
+    }
+
+    list_destroy(ready);
+    return elegido;
+}
+
 // El proximo Job de READY segun ALGORITMO_PLANIFICACION, o NULL si la cola esta vacia.
 static t_pcb* elegir_job(void) {
     switch (config_planificador.algoritmo_planificacion) {
         case ALGORITMO_FIFO:
         case ALGORITMO_RR:  // RR elige igual que FIFO: lo que cambia es el desalojo por quantum
             return elegir_job_fifo();
-        case ALGORITMO_HRRN:
+        case ALGORITMO_HRRN:  // sin desalojo: solo se arranca el quantum con RR
+            return elegir_job_hrrn();
         default:
-            return elegir_job_fifo();  // TODO: HRRN, mientras tanto FIFO (avisado al inicializar)
+            return elegir_job_fifo();  // no pasa: el algoritmo se valida al leer el config
     }
 }
 
@@ -106,10 +144,6 @@ void iniciar_corto_plazo(void) {
 }
 
 void inicializar_corto_plazo(void) {
-    if (config_planificador.algoritmo_planificacion == ALGORITMO_HRRN) {
-        log_warning(planificador_logger, "HRRN todavia no esta implementado: se planifica en FIFO");
-    }
-
     int response = sem_init(&sem_jobs_en_ready, 0, 0);
     if (response == ERROR_SEM_INIT) {
         log_error(planificador_logger, "Error al inicializar semaforo sem_jobs_en_ready");
