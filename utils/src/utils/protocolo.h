@@ -73,6 +73,7 @@ typedef enum {
     DESLOCKEO_OK          = 51,
     OBTENER_TAM_PAGINA    = 52,
     RESPUESTA_TAM_PAGINA  = 53,
+    MARCO_ERROR           = 54, 
 
 
     // --- 70-99: Planificador <-> Placa (Check 3) ---
@@ -96,6 +97,12 @@ typedef enum {
     FETCH_ERROR_PC_FUERA_DE_RANGO = 0,
     FETCH_ERROR_JID_INEXISTENTE   = 1
 } t_fetch_error;
+
+// Motivo del MARCO_ERROR (54): por qué la Placa no pudo dar el marco. Igual que t_fetch_error.
+typedef enum {
+    MARCO_ERROR_JID_INEXISTENTE    = 0,   // no hay Job con ese JID
+    MARCO_ERROR_PAGINA_NO_ASIGNADA = 1    // la página no es de ninguna asignación (ALLOC) del Job
+} t_marco_error;
 
 // Motivo por el que el Core devuelve un Job al Planificador.
 typedef enum {

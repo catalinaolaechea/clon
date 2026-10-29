@@ -21,7 +21,6 @@ typedef struct {
 //array de cant_marcos
 extern t_marco* marcos;
 
-
 #define SLOT_SIN_ASIGNAR UINT32_MAX
 
 // tabla de paginas por job
@@ -46,5 +45,10 @@ bool inicializar_memoria();
 int marcos_libres();
 
 void retardo_memoria();
+
+// Anota que la página se acaba de usar (para el reemplazo: ultimo_acceso para LRU, uso para Clock-M).
+// Se llama con mutex_memoria tomado.
+void registrar_acceso(t_entrada_pagina* entrada);
+
 
 #endif

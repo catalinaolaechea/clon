@@ -9,6 +9,9 @@ t_marco* marcos = NULL;
 
 pthread_mutex_t mutex_memoria = PTHREAD_MUTEX_INITIALIZER;
 
+//Reloj logico para LRU, cada acceso a una pagina le suma 1 y la pagina guarda ese valor
+static uint64_t contador_accesos = 0;
+
 
 bool inicializar_memoria(){
     memoria = calloc(1, TAM_MEMORIA); //comienzan en 0
@@ -39,4 +42,18 @@ int marcos_libres(){
 // microsegundos, por eso el * 1000.
 void retardo_memoria(){
     usleep(RETARDO_MEMORIA*1000);
+}
+
+// [Enunciado pág. 22 - Reemplazo de páginas]
+// Anota un acceso a la página para que LRU y CLOK-M puedan elegir victima
+
+void registrar_acceso(t_entrada_pagina* entrada){
+    //avanza el reloj logico, este acceso es el mas de todos
+    contador_accesos++;
+
+    //LRU, esta pagina se uso en el instante contador_acceso
+    entrada->ultimo_acceso=contador_accesos;
+
+    //CLOCK-M bit de uso en 1, el algoritmo lo vuevleve a 0 cuando pasa el puntero
+    entrada->uso = true;
 }
