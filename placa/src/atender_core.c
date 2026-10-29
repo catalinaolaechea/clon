@@ -144,21 +144,44 @@ void* atender_core(void* args){
         //  - si la página está residente, se responde el número de marco y la página queda lockeada;
         //  - si no está residente, se responde que ocurrió un Page Fault.
         case OBTENER_MARCO:{
-            break;
 
+            uint32_t jid    = buffer_read_uint32(payload);
+            uint32_t pagina = buffer_read_uint32(payload);
+
+            uint32_t marco = 0;      
+            int motivo     = -1;     
+
+            uint8_t op_respuesta = obtener_marco(jid, pagina, &marco, &motivo);
+
+            retardo_memoria();      
+
+            t_paquete* respuesta = crear_paquete(op_respuesta);
+
+            if(op_respuesta == RESPUESTA_MARCO){
+                // la página está en memoria (y quedó lockeada): se manda su marco
+                buffer_add_uint32(respuesta->buffer, marco);
+
+            } else if(op_respuesta == PAGE_FAULT){
+                // no está en memoria: el contrato pide jid y página
+                buffer_add_uint32(respuesta->buffer, jid);
+                buffer_add_uint32(respuesta->buffer, pagina);
+
+            } else {
+                // MARCO_ERROR: el motivo viaja adentro, igual que en FETCH_ERROR
+                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %d", jid, pagina, motivo);
+                buffer_add_uint32(respuesta->buffer, motivo);
+            }
+
+            int validar = enviar_paquete(socket_cliente, respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder OBTENER_MARCO al Core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
+            break;
         }
 
-        /*case RESPUESTA_MARCO:{
-            break;
-
-        }*/
-
-        // PAGE_FAULT es una RESPUESTA de la Placa al Core (dentro de la obtención de marco), no un
-        // pedido que el Core le mande a la Placa. Ver docs/protocolo.md, op_code 44.
-        case PAGE_FAULT:{
-            break;
-
-        }
         // [Enunciado pág. 23 - Deslockeo de páginas] (Check 3)
         // El Core la envía al terminar con éxito cada ciclo de instrucción, o al devolverle el Job
         // al Planificador (por ejemplo, tras un Page Fault). Se recibe el JID y se liberan los
@@ -169,8 +192,7 @@ void* atender_core(void* args){
 
             if(!deslockear_paginas(jid))
                 log_warning(placa_logger, "DESLOCKEAR PAGINAS de un JID inexistente %u",jid);
-            break;
-
+                
             retardo_memoria();
 
             t_paquete* respuesta = crear_paquete(DESLOCKEO_OK);
