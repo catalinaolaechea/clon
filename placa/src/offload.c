@@ -82,7 +82,7 @@ bool inicializador_offload(){
         return false;
     }
 
-    log_debug(placa_logger, "Offload: %s, %d bytes", PATH_OFFLOAD, TAM_OFFLOAD);
+    log_debug(placa_logger, "Offload: %s, %d bytes, %u slots de %d bytes", PATH_OFFLOAD, TAM_OFFLOAD, cant_slots, TAM_PAGINA);
     return true;
 
     
@@ -163,4 +163,61 @@ bool leer_pagina_offload(uint32_t slot, void* destino){
 
     return true;
 }
+
+// [Enunciado pág. 22 - Asignación de espacio]
+// "Se deberá reservar en el Offload el lugar necesario para respaldar las páginas asignadas.
+// En caso de no contar con espacio suficiente, la operación no se podrá realizar".
+// Por eso es todo o nada: primero se buscan los slots libres y recién después se marcan.
+
+bool reservar_slots(uint32_t cantidad, uint32_t* slots){
+    
+    //slots libres se encontraron hasta ahora
+    uint32_t encontrados =0;
+
+    //recorrer todos los slots (hasta cant_slots)
+
+    for(uint32_t i=0; i<cant_slots && encontrados < cantidad; i++){
+
+        //bit en 0, es slots libre
+        if(!bitarray_test_bit(slots_offload, i)){
+            slots[encontrados] = i;
+            encontrados++;
+        }
+    }
+
+    //no alcazaron, no se marco nada, no hay nada
+    if(encontrados < cantidad ){
+        log_debug(placa_logger, "Offload sin lugar: se pidieron %u slots y hay %u libres", cantidad, encontrados);
+        return false;
+    }
+
+    //alcanzaron, se marcan como ocupados 
+    for(uint32_t i=0; i< cantidad; i++){
+        bitarray_set_bit(slots_offload, slots[i]);
+    }
+
+    return true;
+
+}
+
+// [Enunciado pág. 22 - Liberación de espacio] + [pág. 23 - Finalización de Job]
+// Libera el lugar que una página tenía reservado en el Offload.
+void liberar_slot(uint32_t slot){
+
+    //un slot fuera de rango no se toca 
+    if(slot >= cant_slots){
+        log_warning(placa_logger, "Offload - Liberación de slots inexistente: %u", slot);
+        return;
+    }
+
+    //bit en 0, slot libre otra vez
+    bitarray_clean_bit(slots_offload,slot);
+    
+}
+
+
+
+
+
+
 
