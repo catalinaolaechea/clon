@@ -5,6 +5,7 @@
 #include "corto_plazo.h"
 #include "jobs.h"
 #include "syscalls.h"
+#include "cliente_placa.h"
 
 #define DEVOLUCION_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint8_t))
 
@@ -50,4 +51,22 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
         default:
             log_warning(planificador_logger, "Job %u devuelto con motivo %u, todavia no soportado", jid, motivo);
     }
+}
+
+void recuperar_job_de_core_caido(uint32_t jid, int identificador_core) {
+    t_pcb* pcb = reclamar_job_en_exec(jid, identificador_core);
+    if (pcb == NULL) {
+        // ya lo devolvio el corto plazo (le fallo el despacho) o el Job ya no estaba en EXEC
+        log_debug(planificador_logger, "El Job %u ya no estaba en EXEC con el Core %d", jid, identificador_core);
+        return;
+    }
+
+    // el deslockeo va antes de READY: si no, otro Core podria tomar el Job y perder sus locks nuevos
+    if (!placa_deslockear_paginas(jid)) {
+        log_error(planificador_logger, "No se pudieron deslockear las paginas del Job %u: vuelve a READY igual", jid);
+    }
+
+    // el contexto queda el del ultimo despacho: lo que el Core ejecuto despues se perdio con el
+    cambiar_estado(pcb, ESTADO_READY);
+    corto_plazo_avisar_job_ready();
 }

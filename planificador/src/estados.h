@@ -18,6 +18,7 @@ void encolar_pcb(t_pcb* pcb);
 t_pcb* primer_pcb_de_cola(t_estado estado);
 t_pcb* buscar_pcb_en_cola(t_estado estado, uint32_t jid);  // NULL si no esta en esa cola
 bool sacar_pcb_de_cola(t_pcb* pcb);  // de la cola de su estado actual, false si no estaba
+t_pcb* reclamar_job_en_exec(uint32_t jid, int identificador_core);  // NULL si ya no esta en EXEC con ese Core
 t_list* copiar_cola(t_estado estado);  // copia de la lista, no de las PCB: se libera con list_destroy
 
 #endif

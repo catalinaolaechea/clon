@@ -51,7 +51,10 @@ static void registrar_core(int identificador, t_canal canal, int fd) {
     }
 }
 
-static void desregistrar_core(int identificador, t_canal canal) {
+// Si se cerro el canal dispatch de un Core que ejecutaba un Job, devuelve true y deja ese Job en
+// 'jid_en_ejecucion': el que llama tiene que devolverlo a READY.
+static bool desregistrar_core(int identificador, t_canal canal, uint32_t* jid_en_ejecucion) {
+    bool tenia_job = false;
     pthread_mutex_lock(&mutex_cores);
 
     for (int i = 0; i < list_size(cores_conectados); i++) {
@@ -59,6 +62,13 @@ static void desregistrar_core(int identificador, t_canal canal) {
         if (core->identificador == identificador) {
             if (canal == CANAL_DISPATCH) {
                 core->fd_dispatch = -1;
+
+                // sin el canal dispatch el Core ya no puede devolver su Job: se lo saca aca
+                if (!core->libre) {
+                    *jid_en_ejecucion = core->jid;
+                    core->libre = true;
+                    tenia_job = true;
+                }
             } else {
                 core->fd_interrupt = -1;
             }
@@ -75,6 +85,8 @@ static void desregistrar_core(int identificador, t_canal canal) {
     int size_cores = list_size(cores_conectados);
     pthread_mutex_unlock(&mutex_cores);
     log_info(planificador_logger, "Cores conectados post desregistro: %d", size_cores);
+
+    return tenia_job;
 }
 
 bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
@@ -96,6 +108,24 @@ bool tomar_core_libre(uint32_t jid, t_core_conectado* core_tomado) {
 
     pthread_mutex_unlock(&mutex_cores);
     return false;
+}
+
+bool core_sigue_con_job(int identificador, uint32_t jid, uint32_t numero_despacho) {
+    pthread_mutex_lock(&mutex_cores);
+
+    bool sigue = false;
+
+    for (int i = 0; i < list_size(cores_conectados); i++) {
+        t_core_conectado* core = list_get(cores_conectados, i);
+        if (core->identificador == identificador) {
+            sigue = !core->libre && core->jid == jid && core->numero_despacho == numero_despacho
+                    && core->fd_dispatch != -1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&mutex_cores);
+    return sigue;
 }
 
 bool liberar_core(int identificador, uint32_t jid) {
@@ -232,10 +262,14 @@ static void* atender_core(void* ctx) {
         eliminar_buffer(buffer);
     }
 
-    // TODO: Ante la desconexion de un core, el job que estaba ejecutando debe volver a READY
-    // y debe solicitar a la placa el deslockeo de sus paginas
-    desregistrar_core(identificador, canal);
+    uint32_t jid_en_ejecucion;
+    bool tenia_job = desregistrar_core(identificador, canal, &jid_en_ejecucion);
     liberar_conexion(&fd);
+
+    if (tenia_job) {
+        log_info(planificador_logger, "El Core %d se desconecto ejecutando el Job %u", identificador, jid_en_ejecucion);
+        recuperar_job_de_core_caido(jid_en_ejecucion, identificador);
+    }
 
     return NULL;
 }

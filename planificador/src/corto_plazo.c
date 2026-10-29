@@ -6,6 +6,7 @@
 #include "pcb.h"
 #include "servidores_core.h"
 #include "quantum.h"
+#include "devolucion.h"
 
 #define ERROR_SEM_INIT -1
 #define ESTIMACION_MINIMA_MS 1.0  // para no dividir por 0 si la estimacion llega a 0
@@ -87,12 +88,11 @@ static void despachar_job(t_pcb* pcb, t_core_conectado* core) {
     int resultado = enviar_paquete(core->fd_dispatch, paquete);
     eliminar_paquete(paquete);
 
-    if (resultado != CONEXION_OK) {
-        // el Core se cayo: queda ocupado hasta que se desregistre, el Job vuelve a READY
-        log_error(planificador_logger, "No se pudo despachar el Job %u al Core %d", pcb->jid, core->identificador);
-        pcb->core_asignado = -1;
-        cambiar_estado(pcb, ESTADO_READY);
-        corto_plazo_avisar_job_ready();
+    // Si el Core se cayo mientras se le despachaba, el Job se rescata igual que en una desconexion.
+    // El hilo de ese Core puede estar haciendo lo mismo: lo rescata el que lo reclama primero.
+    if (resultado != CONEXION_OK || !core_sigue_con_job(core->identificador, pcb->jid, core->numero_despacho)) {
+        log_error(planificador_logger, "No se pudo despachar el Job %u al Core %d: se desconecto", pcb->jid, core->identificador);
+        recuperar_job_de_core_caido(pcb->jid, core->identificador);
         return;
     }
 

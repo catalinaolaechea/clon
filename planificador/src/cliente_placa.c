@@ -94,3 +94,50 @@ bool placa_finalizar_job(uint32_t jid) {
 
     return true;
 }
+
+bool placa_deslockear_paginas(uint32_t jid) {
+    log_info(planificador_logger, LOG_DESLOCKEO, jid);
+
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(DESLOCKEAR_PAGINAS);
+    buffer_add_uint32(paquete->buffer, jid);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar DESLOCKEAR_PAGINAS del JID %u a la Placa", jid);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio DESLOCKEAR_PAGINAS del JID %u", jid);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio DESLOCKEAR_PAGINAS del JID %u", jid);
+        return false;
+    }
+
+    eliminar_buffer(buffer);  // DESLOCKEO_OK viene vacio, pero hay que sacarlo del socket
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+
+    if (op_code != DESLOCKEO_OK) {
+        log_error(planificador_logger, "La Placa respondio %u a DESLOCKEAR_PAGINAS del JID %u", op_code, jid);
+        return false;
+    }
+
+    return true;
+}
