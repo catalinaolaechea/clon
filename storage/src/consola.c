@@ -31,6 +31,10 @@ static bool nombre_valido(const char* nombre);
 static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad);
 static bool contenido_hexa_valido(const char* texto, uint8_t* bytes, uint32_t* cantidad);
 static void mostrar_comandos(void);
+static void imprimir_superbloque(const char* firma, uint32_t tam_bloque, uint32_t cant_bloques, uint32_t bloques_directorio);
+static void imprimir_encabezado_ls(void);
+static void imprimir_entrada_ls(uint32_t nro_entrada, bool ocupada, const char* nombre, uint32_t tamanio, uint32_t primer_bloque);
+static void imprimir_resumen_ls(uint32_t ocupadas, uint32_t total);
 static void comando_info(void);
 static void comando_ls(void);
 static void comando_cat(char** palabras);
@@ -193,13 +197,47 @@ static void mostrar_comandos(void) {
    printf("  %s\n", USO_RM);
 }
 
-//! aca vamos a ir teniendo los comandos definidos que hace cada uno 
+//! aca vamos a ir teniendo los comandos definidos que hace cada uno. Esta cuando usamos "INFO" en terminal (por ahora lo lee de disco) agarra los valores que calculo issue-29 que salen del .config y se los pasa a "imprimir_superbloque()" para que se vea en ese formato 
 static void comando_info(void) {
-   printf("INFO: pendiente (SIS-79)\n");
+   t_storage_layout layout = storage_filesystem_layout();  // aca guardamos una COPIA del layout que calculo el SIS-29 al arrancar (struct con todas las cuentas del volumen)
+
+   imprimir_superbloque(STORAGE_FS_FIRMA, layout.tam_bloque, layout.cant_bloques, layout.bloques_directorio);  // imprimimos ese superbloque con "imprimir_superbloque()" que mas abajo la definimos denotando las partes del volumen (tamaño del bloque, cantidad de bloques y directorio de bloques), con la cte que es "FAT32_TRAIN"
+   printf("(valores del .config: la lectura real del bloque 0 llega en SIS-79)\n");
 }
 
+//! para comando LS arma una tabla de 3 partes (encabezado, fila y resumen), todavia no lee el directorio muestra una fila inventada para que se vea el formato 
 static void comando_ls(void) {
-   printf("LS: pendiente (SIS-79)\n");
+   t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba 
+
+   imprimir_encabezado_ls();  // mostramos los titulos 
+   imprimir_entrada_ls(0, true, "modelo7", 40, 130);  // esta es la fila inventada para ver el formato 
+   imprimir_resumen_ls(0, layout.entradas_directorio);  // de 0 a 128 
+   printf("(la fila de arriba es de ejemplo: la lectura real del directorio llega en SIS-79)\n");
+}
+
+//! recibe los 4 campos del superbloque y los imprime uno por uno por renglon, con nombre valor y unidad, con el issue-79 los lee del disco, pero el formato siempre es este 
+static void imprimir_superbloque(const char* firma, uint32_t tam_bloque, uint32_t cant_bloques, uint32_t bloques_directorio) {
+   printf("Superbloque\n");  // titulo 
+   printf("  Firma:                  %s\n", firma);  
+   printf("  Tamaño de bloque:       %u bytes\n", tam_bloque);
+   printf("  Cantidad de bloques:    %u\n", cant_bloques);
+   printf("  Bloques del directorio: %u\n", bloques_directorio);
+}
+
+//! imprime las 2 primeras lineas de la tabla LS, titulos y raya separadora. No recibe nada porque siempre es igual, la definimos porque la usamos cuando definimos como funciona el comando_ls()
+static void imprimir_encabezado_ls(void) {
+   printf("Entrada | Estado  | Nombre                 | Tamaño (bytes) | Primer bloque\n");
+   printf("--------+---------+------------------------+----------------+--------------\n");
+}
+
+//! imprimte una fila de la tabla (osea una "entrada de un directorio") con sus 4 atributos (estado, nombre, tamaño y primer bloque) y su numero de entrada. Con issue-79 va a llamar una vez por cada checkpoint que se encuentre en el directorio y termina armando una tabla 
+static void imprimir_entrada_ls(uint32_t nro_entrada, bool ocupada, const char* nombre, uint32_t tamanio, uint32_t primer_bloque) {
+   printf("%7u | %-7s | %-22s | %14u | %13u\n", nro_entrada, ocupada ? "ocupada" : "libre", nombre, tamanio, primer_bloque);
+}
+
+//! imprime el renglon final de LS, cuantras entradas ocupadas entre el total hay. Sirve para dar un vistazo cuanto lugar queda en el directorio (osea cuantos checkpoints mas se pueden guardar)
+static void imprimir_resumen_ls(uint32_t ocupadas, uint32_t total) {
+   printf("%u de %u entradas ocupadas\n", ocupadas, total);
 }
 
 static void comando_cat(char** palabras) {
