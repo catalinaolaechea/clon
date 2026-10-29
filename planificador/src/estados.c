@@ -49,6 +49,7 @@ void cambiar_estado(t_pcb* pcb, t_estado estado_siguiente) {
 
     pcb->estado = estado_siguiente;
     pcb_actualizar_estadisticas(pcb, estado_anterior, estado_siguiente);  // bajo el mismo mutex que el cambio
+    pcb_actualizar_planificacion(pcb, estado_anterior, estado_siguiente);
 
     // Agregar el PCB a la nueva cola de estado
     list_add(colas_estados[estado_siguiente], pcb);
@@ -93,4 +94,14 @@ bool sacar_pcb_de_cola(t_pcb* pcb) {
 
     pthread_mutex_unlock(&mutex_estados);
     return sacado;
+}
+
+// Sirve para recorrer una cola sin tener el mutex tomado todo ese tiempo
+t_list* copiar_cola(t_estado estado) {
+    pthread_mutex_lock(&mutex_estados);
+
+    t_list* copia = list_duplicate(colas_estados[estado]);
+
+    pthread_mutex_unlock(&mutex_estados);
+    return copia;
 }
