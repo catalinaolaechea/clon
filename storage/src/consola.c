@@ -22,12 +22,14 @@
 #define USO_RM    "RM <CheckpointName>"
 
 #define MAX_CARACTERES_NOMBRE (STORAGE_DIR_BYTES_NOMBRE - 1) // adecuandose a la cte de bytes de la entrada de un directorio, al nombre le alcanza como maximo 23 de esos 32 bytes, uno menos para contar con el "\0"
+#define MAX_BYTES_WRITE 20  // del enunciado nos piden que "WRITE" escriba hasta 20 bytes 
 
-// estos prototipos son porque en C una funcion tiene que estar declarada antes para que alguien la llame en las funciones que declaramos aca. Son "static" porque son privadas de este archivo 
+//! estos prototipos son porque en C una funcion tiene que estar declarada antes para que alguien la llame en las funciones que declaramos aca. Son "static" porque son privadas de este archivo 
 static void ejecutar_comando(char* linea);
 static bool cantidad_valida(char** palabras, int esperada, const char* uso); 
 static bool nombre_valido(const char* nombre);
 static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad);
+static bool contenido_hexa_valido(const char* texto, uint8_t* bytes, uint32_t* cantidad);
 static void mostrar_comandos(void);
 static void comando_info(void);
 static void comando_ls(void);
@@ -54,7 +56,7 @@ void* storage_consola_atender(void* sin_uso) {
    return NULL;
 }
 
-// aca vamos a tener los los posibles comandos de nuestra consola una vez vayamos leyendo las lineas que guarda el readline 
+//! aca vamos a tener los los posibles comandos de nuestra consola una vez vayamos leyendo las lineas que guarda el readline 
 static void ejecutar_comando(char* linea) {
    char** palabras = string_split(linea, " ");  // agarra la linea por ejemplo "CAT modelo7 16" y las splitea en {"CAT", "modelo7", "16", NULL}
    char* comando = palabras[0];  // para no andar repitiendo "palabras[0]" que sabemos es donde debe venir el comando en orden, entonces directamente lo guardamos aca 
@@ -88,7 +90,7 @@ static void ejecutar_comando(char* linea) {
    string_array_destroy(palabras);  // liberamos las lineas spliteadas que leimos 
 }
 
-// aca es donde validamos que la cantidad sea valida, recibimos la linea de palabras spliteadas, la cantidad esperada y el uso especifico que debe tener 
+//! aca es donde validamos que la cantidad sea valida, recibimos la linea de palabras spliteadas, la cantidad esperada y el uso especifico que debe tener 
 static bool cantidad_valida(char** palabras, int esperada, const char* uso) {
    if (string_array_size(palabras) != esperada) {  // comparamos y en caso de no tener la cantidad esperada devolvemos un mensaje con el uso especifico que debe tener 
       printf("Cantidad de argumentos invalida. Uso: %s\n", uso);  // aca, que es "USO_LS", "USO_WRITE" etc. 
@@ -98,7 +100,7 @@ static bool cantidad_valida(char** palabras, int esperada, const char* uso) {
    return true;  // caso que sea la cantidad esperada la dejamos pasar 
 }
 
-// recibe el nombre del checkpoint, devuelve true si sirve
+//! recibe el nombre del checkpoint, devuelve true si sirve
 static bool nombre_valido(const char* nombre) {
    if (nombre[0] == '\0') {  // miramos si el nombre es vacio
       printf("Nombre de checkpoint invalido: no puede estar vacio\n");
@@ -115,7 +117,7 @@ static bool nombre_valido(const char* nombre) {
    return true;
 }
 
-// agregamos esta funcion que la necesitamos para poder ejecutar el comando de CAT, el comando seria algo como "CAT modelo7 12abc" en el parametro texto va a recibir "12abc" y evaluarlo 
+//! agregamos esta funcion que la necesitamos para poder ejecutar el comando de CAT, el comando seria algo como "CAT modelo7 12abc" en el parametro texto va a recibir "12abc" y evaluarlo 
 static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad) {
    if (!isdigit((unsigned char) texto[0])) {  // primero como base miramos que NO arranque con un digito 
       printf("cantBytes invalido: \"%s\" no es un numero entero positivo\n", texto);  
@@ -145,6 +147,42 @@ static bool cantidad_bytes_valida(const char* texto, uint32_t* cantidad) {
    return true;
 }
 
+//! esta funcion recibe el texto escrito despues del nombre en comando WRITE, que viene en forma "WRITE modelo7 0A1B2C", se fija que el numero sea hexa valido, de longitud par y 20 bytes como maximo, y lo convierte en la cantidad de bytes que significa dicho numero en hexa 
+static bool contenido_hexa_valido(const char* texto, uint8_t* bytes, uint32_t* cantidad) {
+   size_t largo = strlen(texto);  // consigue largo 
+
+   if (largo == 0) {
+      printf("hexaContent invalido: no puede estar vacio\n");  // caso que sea vacio que no tenga longitud 
+      return false;
+   }
+
+   for (size_t i = 0; i < largo; i++) {  // recorre todos los caracteres uno por uno 
+      if (!isxdigit((unsigned char) texto[i])) {  // "isxdigit()" mira si dicho caracter es 0-9, a-f o A-F, caso de no serlo directamente no es hexa
+         printf("hexaContent invalido: '%c' (caracter %zu) no es hexadecimal (0-9, A-F)\n", texto[i], i + 1);
+         return false;
+      }
+   }
+
+   if (largo % 2 != 0) {  // caso que longitud no sea par 
+      printf("hexaContent invalido: tiene %zu caracteres y tiene que ser par (2 por byte)\n", largo);
+      return false;
+   }
+
+   if (largo / 2 > MAX_BYTES_WRITE) {  // caso que la cantidad de bytes sobre pase la maxima 
+      printf("hexaContent invalido: son %zu bytes y el maximo es %d\n", largo / 2, MAX_BYTES_WRITE);
+      return false;
+   }
+
+   // una vez todo validado si no es uno de los casos anteriores vamos a convertir a bytes 
+   for (size_t i = 0; i < largo / 2; i++) {  // lo recorre "de a un byte" osea la cadena cada 2 caracteres es un byte
+      char par[3] = { texto[2 * i], texto[2 * i + 1], '\0' };  // arma un texto mostrando cada 2 caracteres 
+      bytes[i] = (uint8_t) strtoul(par, NULL, 16);  // terminamos guardando en un array cada byte usando tambien "strtoul()" pero en base16 
+   }
+
+   *cantidad = (uint32_t) (largo / 2);  // aca guardamos la cantidad de bytes quedaron y lo guardamos en esta variable 
+   return true;
+}
+
 // mostramos los posibles comandos con sus usos especificos 
 static void mostrar_comandos(void) {
    printf("Comandos disponibles:\n");
@@ -155,7 +193,7 @@ static void mostrar_comandos(void) {
    printf("  %s\n", USO_RM);
 }
 
-//! por ahora no tenemos definido que hace cada comando, pero lo dejamos para el sis-79 que ahi los definimos, por ahora tenemos todo el esqueleto anterior
+//! aca vamos a ir teniendo los comandos definidos que hace cada uno 
 static void comando_info(void) {
    printf("INFO: pendiente (SIS-79)\n");
 }
@@ -185,7 +223,20 @@ static void comando_write(char** palabras) {
       return;
    }
 
-   printf("WRITE %s %s: pendiente (SIS-81)\n", palabras[1], palabras[2]);
+   uint8_t bytes[MAX_BYTES_WRITE];  // tenemos un array para guardar la mayor cantidad posible de bytes que tenemos (que son 20 lugares en total)
+   uint32_t cantidad;  // aca vamos a tener cuantos de esos 20 lugares se van a usar para escribir en el WRITE
+
+   if (!contenido_hexa_valido(palabras[2], bytes, &cantidad)) {  // verificamos que lo que queremos escribir con WRITE tenga contenido hexa valido con la funcion q definimos arriba 
+      return;
+   }
+
+   printf("WRITE %s: se escribirian %u bytes:", palabras[1], cantidad);  // si esta todo ok antes de escribir nada mostramos un "placeholder" con lo que escribiria, para ver si la conversion anduvo bien
+
+   for (uint32_t i = 0; i < cantidad; i++) {  // recorremos unicamente hasta la cantidad posible que tome aquello en hexa que queremos escribir 
+      printf(" %02X", bytes[i]);  // imprimimos entonces cada byte con las siguientes condiciones, sale en hexa, en mayuscula, con 2 digitos y separado por un espacio 
+   }
+
+   printf(" (pendiente SIS-81)\n");
 }
 
 static void comando_rm(char** palabras) {
