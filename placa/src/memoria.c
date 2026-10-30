@@ -251,6 +251,36 @@ bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32
 
 }
 
+// [Enunciado pág. 23 - Lectura de datos]
+// Log obligatorio (pág. 24): "## JID: <JID> - Lectura - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
+void* leer_memoria(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo){
 
+    void* copia = NULL;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_entrada_pagina* entrada = validar_acceso(jid, dir_fisica, tamanio, motivo);
+
+        if(entrada != NULL){
+            // recién acá se reserva: ya se sabe que tamanio entra en un marco (como mucho 64)
+            copia = malloc(tamanio);
+
+            // copia desde la RAM hacia la copia nueva (al revés que en escribir_memoria)
+            memcpy(copia, (char*) memoria + dir_fisica, tamanio);
+
+            // leer es "usar" la página, pero NO la modifica
+            registrar_acceso(entrada);
+        }
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(copia!= NULL )
+        log_info(placa_logger, "## JID: %u - Lectura - Dir. Física: %u - Tamaño: %u", jid, dir_fisica, tamanio);
+
+    return copia;
+
+}
 
 

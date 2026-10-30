@@ -66,5 +66,10 @@ bool deslockear_paginas(uint32_t jid);
 // Si el pedido es inválido devuelve false y deja en *motivo el t_memoria_error.
 bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32_t tamanio, int* motivo);
 
+// [Enunciado pág. 23 - Lectura de datos] Devuelve una copia (hay que liberarla) de "tamanio" bytes
+// desde dir_fisica, o NULL si el pedido es inválido (en *motivo queda el t_memoria_error).
+void* leer_memoria(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo);
+
+
 
 #endif
