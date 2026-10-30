@@ -188,3 +188,68 @@ bool placa_cargar_pagina(uint32_t jid, uint32_t nro_pagina) {
 
     return true;
 }
+
+bool placa_leer_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* destino) {
+    log_info(planificador_logger, LOG_ACCESO_MEMORIA, jid, "Lectura", pedazo->direccion, pedazo->tamanio);
+
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(LEER_MEMORIA);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, pedazo->direccion);
+    buffer_add_uint32(paquete->buffer, pedazo->tamanio);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar LEER_MEMORIA del JID %u (direccion %u) a la Placa", jid, pedazo->direccion);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio LEER_MEMORIA del JID %u (direccion %u)", jid, pedazo->direccion);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio LEER_MEMORIA del JID %u (direccion %u)", jid, pedazo->direccion);
+        return false;
+    }
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);  // la respuesta ya salio del socket
+
+    bool ok = false;
+
+    if (op_code == RESPUESTA_LEER_MEMORIA) {
+        // el bloque es { uint32 tamanio, bytes }: se verifica que traiga justo lo pedido antes de copiar
+        uint32_t declarado = 0;
+        if (buffer->size >= sizeof(uint32_t)) memcpy(&declarado, buffer->stream, sizeof(uint32_t));
+
+        if (declarado == pedazo->tamanio && buffer->size == sizeof(uint32_t) + declarado) {
+            uint32_t recibido;
+            void* datos = buffer_read_bloque(buffer, &recibido);
+            memcpy(destino, datos, recibido);
+            free(datos);
+            ok = true;
+        } else {
+            log_error(planificador_logger, "La Placa devolvio un bloque de tamanio inesperado al leer del JID %u (direccion %u): se pidio %u", jid, pedazo->direccion, pedazo->tamanio);
+        }
+    } else if (op_code == MEMORIA_ERROR && buffer->size == sizeof(uint32_t)) {
+        log_error(planificador_logger, "La Placa rechazo la lectura del JID %u (direccion %u): motivo %u", jid, pedazo->direccion, buffer_read_uint32(buffer));
+    } else {
+        log_error(planificador_logger, "La Placa respondio %u a LEER_MEMORIA del JID %u (direccion %u)", op_code, jid, pedazo->direccion);
+    }
+
+    eliminar_buffer(buffer);
+    return ok;
+}
