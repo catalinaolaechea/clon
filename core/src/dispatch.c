@@ -87,6 +87,20 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* p
             continue;
         }
 
+        // ALLOC y FREE no bloquean: igual que INIT_JOB
+        if (strcmp(pendiente->nombre, "ALLOC") == 0 || strcmp(pendiente->nombre, "FREE") == 0) {
+            bool ok = (strcmp(pendiente->nombre, "ALLOC") == 0) ? ejecutar_alloc(jid, pendiente, contexto)
+                                                                 : ejecutar_free(jid, pendiente, contexto);
+            destruir_instruccion(pendiente);
+
+            if (!ok) return MOTIVO_EXIT;
+
+            contexto->pc++;
+            if (!liberar_paginas_del_ciclo(jid)) return MOTIVO_EXIT;
+            if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
+            continue;
+        }
+
         // FORWARD / BACKWARD / UPDATE: leen y escriben la memoria del Job a traves de la MMU.
         if (es_instruccion_entrenamiento(pendiente->nombre)) {
             t_resultado_entrenamiento entrenamiento = ejecutar_entrenamiento(jid, pendiente, contexto, pagina_faltante);
