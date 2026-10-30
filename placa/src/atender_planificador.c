@@ -109,16 +109,78 @@ void* atender_planificador(void* planificador){
 
         // [Enunciado pág. 23 - Lectura / Escritura de datos] (Check 3)
         // Las usa el Planificador en las syscalls de memoria (LOAD_BATCH, LABEL, REPORT y checkpoints).
-        /*case LEER_DATO:{
+        case LEER_MEMORIA:{
+
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_fisica = buffer_read_uint32(payload);
+            uint32_t tamanio = buffer_read_uint32(payload);
+
+            int motivo =-1;
+
+            void* datos = leer_memoria(jid,dir_fisica,tamanio,&motivo);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            if(datos!= NULL){
+                respuesta = crear_paquete(RESPUESTA_LEER_MEMORIA);
+                buffer_add_bloque(respuesta->buffer,datos,tamanio);
+                free(datos);
+            } else {
+                log_error(placa_logger, "Lectura inválida - JID: %u - Dir. Física: %u - Tamaño: %u - Motivo: %d", jid, dir_fisica, tamanio, motivo);
+
+                respuesta = crear_paquete(MEMORIA_ERROR);
+                buffer_add_uint32(respuesta->buffer,motivo);
+
+            }
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK ){
+                log_error(placa_logger, "No se pudo responder LEER_MEMORIA al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
             break;
 
         }
-        case ESCRIBIR_DATO:{
-            break;
+        
+        case ESCRIBIR_MEMORIA:{
 
+            uint32_t jid        = buffer_read_uint32(payload);
+            uint32_t dir_fisica = buffer_read_uint32(payload);
+
+            uint32_t tamanio;
+            void* contenido = buffer_read_bloque(payload, &tamanio);   
+
+            int motivo = -1;                                           
+            bool escribio = escribir_memoria(jid, dir_fisica, contenido, tamanio, &motivo);
+
+            free(contenido);                                            
+
+            retardo_memoria();                                          
+
+            t_paquete* respuesta;
+
+            if(escribio){
+                respuesta = crear_paquete(ESCRIBIR_MEMORIA_OK);         
+            } else {
+                log_error(placa_logger, "Escritura inválida - JID: %u - Dir. Física: %u - Tamaño: %u - Motivo: %d", jid, dir_fisica, tamanio, motivo);
+                respuesta = crear_paquete(MEMORIA_ERROR);               
+                buffer_add_uint32(respuesta->buffer, motivo);
+            }
+
+            int validar = enviar_paquete(socket_cliente, respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder ESCRIBIR_MEMORIA al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
+            break;
         }
 
-        */
 
         // [Enunciado pág. 23 - Finalización de Job]
         // Solo se recibe un JID. Se liberan todos los marcos que tuviera ocupados, el lugar

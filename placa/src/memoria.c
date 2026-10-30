@@ -77,9 +77,9 @@ static bool pagina_asignada(t_job_placa* job, uint32_t nro_pagina){
 // [Enunciado pág. 23 - Obtención de marco]
 // La pide la MMU del Core. Presente -> devuelve el marco y la página queda lockeada.
 // No presente -> PAGE_FAULT sin tocar nada de la tabla (criterio 2 de SIS-59).
-t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco){
+uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* motivo){
 
-    t_resultado_marco resultado;
+    uint8_t respuesta;
 
     pthread_mutex_lock(&mutex_jobs); //nadie finalice el job mientras se usa
 
@@ -89,13 +89,15 @@ t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* mar
 
         if(job == NULL){
             //job no existe
-            resultado = MARCO_JID_INEXISTENTE;
+            *motivo = MARCO_ERROR_JID_INEXISTENTE;
+            respuesta = OBTENER_MARCO_ERROR;
         
         }else if(!pagina_asignada(job,nro_pagina) || nro_pagina >= (uint32_t)list_size(job->tabla_paginas) ){
             //la pagina no esta en ningun alloc del job
             // el segundo chequeo es por seguridad, que no se pase al final de la tabla
 
-            resultado = MARCO_PAGINA_NO_ASIGNADA;
+            *motivo = MARCO_ERROR_PAGINA_NO_ASIGNADA;
+            respuesta = OBTENER_MARCO_ERROR;
 
         }else {
             // indice de la pagina = numero de pagina
@@ -103,7 +105,7 @@ t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* mar
 
             if(!entrada->presente){
                 //es el job pero no esta en memoria, no se toca nada
-                resultado = MARCO_PAGE_FAULT;
+                respuesta = PAGE_FAULT;
             } else {
                 
                 entrada->lockeada = true;
@@ -115,7 +117,7 @@ t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* mar
                 *marco = entrada->marco;
                 //el marco vuelve por el puntero
 
-                resultado = MARCO_OK;
+                respuesta = RESPUESTA_MARCO;
 
             }
         }
@@ -124,7 +126,7 @@ t_resultado_marco obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* mar
     
     pthread_mutex_unlock(&mutex_jobs);
 
-    return resultado;
+    return respuesta;
 
 
 
@@ -163,8 +165,122 @@ bool deslockear_paginas(uint32_t jid){
 }
 
 
+//revisar que el pedido lectura/escritura sea valido y devuelve la entrada de la pagina
+static t_entrada_pagina* validar_acceso(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo){
+
+    //tiene que haber algo que copiar 
+    //y la dirección tiene que existir (de 0 a Tam_memoria-1)
+    if(tamanio == 0 || dir_fisica >= (uint32_t) TAM_MEMORIA){
+        *motivo = MEMORIA_ERROR_FUERA_DE_RANGO;
+        return NULL;
+    }
+
+    uint32_t nro_marco = dir_fisica/TAM_PAGINA;
+    //200/64 = marco 3
+
+    uint32_t desplazamiento = dir_fisica % TAM_PAGINA;
+    //200%64 = 8, 8 bytes dentro del marco
+
+    //no puede pasarse del final del marco
+    //desde el byte 8 quedan 64-8 = 56 bytes
+
+    if(tamanio > (uint32_t) TAM_PAGINA - desplazamiento){
+        *motivo = MEMORIA_ERROR_CRUZA_MARCO;
+        return NULL;
+    }
+
+    // el marco tiene que estar ocupado y por este job
+    t_marco* marco = &marcos[nro_marco];
+    if(!marco->ocupado || marco->jid != jid){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;
+        return NULL;
+    }
+
+    //la pagina que dice el marco tiene que estar en la tabla del job
+    // presente en ese marco
+    t_job_placa* job = buscar_job(jid);
+    if(job == NULL || marco->nro_pagina >= (uint32_t) list_size(job->tabla_paginas)){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;    
+        return NULL;
+    }
+
+    t_entrada_pagina* entrada = list_get(job->tabla_paginas, marco->nro_pagina);
+
+    if(!entrada->presente || entrada->marco !=nro_marco){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;
+        return NULL;
+    }
+
+    return entrada;
+
+}
+
+// [Enunciado pág. 23 - Escritura de datos]
+// Log obligatorio (pág. 24): "## JID: <JID> - Escritura - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
+bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32_t tamanio, int* motivo){
+
+    bool escribio= false;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_entrada_pagina* entrada = validar_acceso(jid,dir_fisica,tamanio,motivo);
+
+        if(entrada!= NULL){
+            //copia los bytes a la RAM
+            //para poder sumarle de a un byte
+
+            memcpy((char*) memoria + dir_fisica, contenido, tamanio);
+
+            registrar_acceso(entrada);
+
+            entrada->modificado = true; 
+
+            escribio=true;
+        } 
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
 
 
+    if(escribio)
 
+        log_info(placa_logger, "## JID: %u - Escritura - Dir. Física: %u - Tamaño: %u", jid, dir_fisica,tamanio);
+
+    return escribio;
+
+}
+
+// [Enunciado pág. 23 - Lectura de datos]
+// Log obligatorio (pág. 24): "## JID: <JID> - Lectura - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
+void* leer_memoria(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo){
+
+    void* copia = NULL;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_entrada_pagina* entrada = validar_acceso(jid, dir_fisica, tamanio, motivo);
+
+        if(entrada != NULL){
+            // recién acá se reserva: ya se sabe que tamanio entra en un marco (como mucho 64)
+            copia = malloc(tamanio);
+
+            // copia desde la RAM hacia la copia nueva (al revés que en escribir_memoria)
+            memcpy(copia, (char*) memoria + dir_fisica, tamanio);
+
+            // leer es "usar" la página, pero NO la modifica
+            registrar_acceso(entrada);
+        }
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(copia!= NULL )
+        log_info(placa_logger, "## JID: %u - Lectura - Dir. Física: %u - Tamaño: %u", jid, dir_fisica, tamanio);
+
+    return copia;
+
+}
 
 

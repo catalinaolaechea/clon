@@ -126,17 +126,84 @@ void* atender_core(void* args){
         // [Enunciado pág. 23 - Escritura de datos] (Check 3)
         // Mismos parámetros que la lectura, más el contenido a escribir.
         // Log obligatorio (pág. 24): "## JID: <JID> - <Lectura/Escritura> - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
-        /*case LEER_DATO:{
+        
+        case LEER_MEMORIA:{
+
+
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_fisca = buffer_read_uint32(payload);
+            uint32_t tamanio = buffer_read_uint32(payload);
+
+            int motivo = -1;
+
+            void* datos = leer_memoria(jid,dir_fisca,tamanio,&motivo);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            if(datos!= NULL){
+                respuesta = crear_paquete(RESPUESTA_LEER_MEMORIA);
+                buffer_add_bloque(respuesta->buffer,datos,tamanio);
+                free(datos);
+            }else{
+                log_error(placa_logger, "Lectura invalida - JID %u - Dir. Fisica: %u - Tamaño %u - Motivo %d", jid,dir_fisca,tamanio,motivo);
+                respuesta = crear_paquete(MEMORIA_ERROR);
+                buffer_add_uint32(respuesta->buffer,motivo);
+            
+            }
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder LEER_MEMORIA al Core %d",core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
+            break;
+
+        }
+
+        case ESCRIBIR_MEMORIA:{
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_fisica = buffer_read_uint32(payload);
+
+            uint32_t tamanio;
+
+            void* contenido = buffer_read_bloque(payload, &tamanio);
+
+            int motivo =-1;
+
+            bool escribio = escribir_memoria(jid,dir_fisica,contenido,tamanio,&motivo);
+
+            free(contenido);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            if(escribio){
+                respuesta = crear_paquete(ESCRIBIR_MEMORIA_OK);
+            }else {
+                log_error(placa_logger, "Escritura inválida - JID: %u - Dir. Física: %u - Tamaño: %u - Motivo: %d", jid, dir_fisica, tamanio, motivo);
+            
+                respuesta = crear_paquete(MEMORIA_ERROR);
+                buffer_add_uint32(respuesta->buffer,motivo);
+            }
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder ESCRIBIR_MEMORIA al core %d", core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
 
             break;
 
         }
-        case ESCRIBIR_DATO:{
 
-            break;
-        }
 
-        */
 
         // [Enunciado pág. 23 - Obtención de marco] (Check 3)
         // La pide el Core durante la traducción de la MMU, con el JID y el número de página.
@@ -148,38 +215,28 @@ void* atender_core(void* args){
             uint32_t jid    = buffer_read_uint32(payload);
             uint32_t pagina = buffer_read_uint32(payload);
 
-            uint32_t marco = 0;
+            uint32_t marco = 0;      
+            int motivo     = -1;     
 
-            t_resultado_marco resultado = obtener_marco(jid, pagina, &marco);
+            uint8_t op_respuesta = obtener_marco(jid, pagina, &marco, &motivo);
 
-            retardo_memoria();
+            retardo_memoria();      
 
-            t_paquete* respuesta;
+            t_paquete* respuesta = crear_paquete(op_respuesta);
 
-            switch(resultado){
-            case MARCO_OK:
+            if(op_respuesta == RESPUESTA_MARCO){
                 // la página está en memoria (y quedó lockeada): se manda su marco
-                respuesta = crear_paquete(RESPUESTA_MARCO);
                 buffer_add_uint32(respuesta->buffer, marco);
-                break;
 
-            case MARCO_PAGE_FAULT:
+            } else if(op_respuesta == PAGE_FAULT){
                 // no está en memoria: el contrato pide jid y página
-                respuesta = crear_paquete(PAGE_FAULT);
                 buffer_add_uint32(respuesta->buffer, jid);
                 buffer_add_uint32(respuesta->buffer, pagina);
-                break;
 
-            default: {
+            } else {
                 // OBTENER_MARCO_ERROR: el motivo viaja adentro, igual que en FETCH_ERROR
-                uint32_t motivo = (resultado == MARCO_JID_INEXISTENTE)
-                                  ? MARCO_ERROR_JID_INEXISTENTE
-                                  : MARCO_ERROR_PAGINA_NO_ASIGNADA;
-                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %u", jid, pagina, motivo);
-                respuesta = crear_paquete(OBTENER_MARCO_ERROR);
+                log_error(placa_logger, "Obtener marco inválido - JID: %u - Página: %u - Motivo: %d", jid, pagina, motivo);
                 buffer_add_uint32(respuesta->buffer, motivo);
-                break;
-            }
             }
 
             int validar = enviar_paquete(socket_cliente, respuesta);
