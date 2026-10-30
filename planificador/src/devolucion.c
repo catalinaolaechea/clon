@@ -11,8 +11,7 @@
 #define DEVOLUCION_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint8_t))
 #define DEVOLUCION_PAGE_FAULT_SIZE (sizeof(uint32_t) + CONTEXTO_SIZE + sizeof(uint32_t))
 
-// Libera el Core y guarda el contexto en la PCB. NULL si la devolucion no corresponde y se descarta.
-static t_pcb* recibir_job_de_core(int identificador_core, uint32_t jid, t_contexto* contexto) {
+t_pcb* recibir_job_de_core(int identificador_core, uint32_t jid, t_contexto* contexto) {
     if (!liberar_core(identificador_core, jid)) {
         log_error(planificador_logger, "El Core %d devolvio el Job %u, que no tenia asignado: se descarta", identificador_core, jid);
         return NULL;
