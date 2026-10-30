@@ -165,7 +165,91 @@ bool deslockear_paginas(uint32_t jid){
 }
 
 
+//revisar que el pedido lectura/escritura sea valido y devuelve la entrada de la pagina
+static t_entrada_pagina* validar_acceso(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo){
 
+    //tiene que haber algo que copiar 
+    //y la dirección tiene que existir (de 0 a Tam_memoria-1)
+    if(tamanio == 0 || dir_fisica >= (uint32_t) TAM_MEMORIA){
+        *motivo = MEMORIA_ERROR_FUERA_DE_RANGO;
+        return NULL;
+    }
+
+    uint32_t nro_marco = dir_fisica/TAM_PAGINA;
+    //200/64 = marco 3
+
+    uint32_t desplazamiento = dir_fisica % TAM_PAGINA;
+    //200%64 = 8, 8 bytes dentro del marco
+
+    //no puede pasarse del final del marco
+    //desde el byte 8 quedan 64-8 = 56 bytes
+
+    if(tamanio > (uint32_t) TAM_PAGINA - desplazamiento){
+        *motivo = MEMORIA_ERROR_CRUZA_MARCO;
+        return NULL;
+    }
+
+    // el marco tiene que estar ocupado y por este job
+    t_marco* marco = &marcos[nro_marco];
+    if(!marco->ocupado || marco->jid != jid){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;
+        return NULL;
+    }
+
+    //la pagina que dice el marco tiene que estar en la tabla del job
+    // presente en ese marco
+    t_job_placa* job = buscar_job(jid);
+    if(job == NULL || marco->nro_pagina >= (uint32_t) list_size(job->tabla_paginas)){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;    
+        return NULL;
+    }
+
+    t_entrada_pagina* entrada = list_get(job->tabla_paginas, marco->nro_pagina);
+
+    if(!entrada->presente || entrada->marco !=nro_marco){
+        *motivo = MEMORIA_ERROR_MARCO_AJENO;
+        return NULL;
+    }
+
+    return entrada;
+
+}
+
+// [Enunciado pág. 23 - Escritura de datos]
+// Log obligatorio (pág. 24): "## JID: <JID> - Escritura - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
+bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32_t tamanio, int* motivo){
+
+    bool escribio= false;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        t_entrada_pagina* entrada = validar_acceso(jid,dir_fisica,tamanio,motivo);
+
+        if(entrada!= NULL){
+            //copia los bytes a la RAM
+            //para poder sumarle de a un byte
+
+            memcpy((char*) memoria + dir_fisica, contenido, tamanio);
+
+            registrar_acceso(entrada);
+
+            entrada->modificado = true; 
+
+            escribio=true;
+        } 
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+
+    if(escribio)
+
+        log_info(placa_logger, "## JID: %u - Escritura - Dir. Física: %u - Tamaño: %u", jid, dir_fisica,tamanio);
+
+    return escribio;
+
+}
 
 
 

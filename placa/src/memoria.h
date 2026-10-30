@@ -62,7 +62,9 @@ uint8_t obtener_marco(uint32_t jid, uint32_t nro_pagina, uint32_t* marco, int* m
 // Devuelve false si el JID no existe. Toma los mutex adentro.
 bool deslockear_paginas(uint32_t jid);
 
-
+// [Enunciado pág. 23 - Escritura de datos] Copia "tamanio" bytes de "contenido" a dir_fisica.
+// Si el pedido es inválido devuelve false y deja en *motivo el t_memoria_error.
+bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32_t tamanio, int* motivo);
 
 
 #endif
