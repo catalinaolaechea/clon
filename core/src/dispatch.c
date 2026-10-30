@@ -1,6 +1,7 @@
 #include "dispatch.h"
 #include "syscalls.h"
 #include "mmu.h"
+#include "entrenamiento.h"
 
 static const char* motivo_to_string(t_motivo_devolucion motivo) {
     switch (motivo) {
@@ -65,9 +66,23 @@ t_motivo_devolucion ejecutar_job(uint32_t jid, t_contexto* contexto, uint32_t* p
             }
 
             bool ok = solicitar_init_job(jid, pendiente->parametros[0]);
-            destruir_instruccion(pendiente);  // recien ahora: parametros[0] apunta adentro de la instruccion
+            destruir_instruccion(pendiente);  
 
-            if (!ok) return MOTIVO_EXIT;  // el motivo ya quedo logueado
+            if (!ok) return MOTIVO_EXIT;  // motivo ya logueado
+
+            contexto->pc++;  
+            if (!liberar_paginas_del_ciclo(jid)) return MOTIVO_EXIT;   // fin del ciclo: nada lockeado
+            if (check_interrupt(jid)) return MOTIVO_FIN_QUANTUM;
+            continue;
+        }
+
+        // FORWARD / BACKWARD / UPDATE: leen y escriben la memoria del Job a traves de la MMU.
+        if (es_instruccion_entrenamiento(pendiente->nombre)) {
+            t_resultado_entrenamiento entrenamiento = ejecutar_entrenamiento(jid, pendiente, contexto, pagina_faltante);
+            destruir_instruccion(pendiente);
+
+            if (entrenamiento == ENTRENAMIENTO_PAGE_FAULT) return MOTIVO_PAGE_FAULT;   // PC sin sumar: se reintenta entera
+            if (entrenamiento == ENTRENAMIENTO_ERROR) return MOTIVO_EXIT;              // el motivo ya quedo logueado
 
             contexto->pc++;  // ejecutar_ciclo no suma 1 en las no basicas
             if (!liberar_paginas_del_ciclo(jid)) return MOTIVO_EXIT;   // fin del ciclo: nada lockeado
