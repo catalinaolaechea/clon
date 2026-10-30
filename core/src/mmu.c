@@ -210,6 +210,10 @@ bool liberar_paginas_del_ciclo(uint32_t jid) {
     return deslockear_paginas(jid);
 }
 
+void ceder_paginas_lockeadas(void) {
+    hay_paginas_lockeadas = false;
+}
+
 bool atender_page_fault(uint32_t jid, uint32_t nro_pagina) {
     log_info(core_logger, LOG_PAGE_FAULT, jid, nro_pagina);
     return deslockear_paginas(jid);

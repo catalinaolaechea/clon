@@ -29,6 +29,9 @@ bool atender_page_fault(uint32_t jid, uint32_t nro_pagina);
 // ningun Job sale del Core, ni termina un ciclo, con paginas lockeadas. Devuelve false si fallo el deslockeo (queda logueado).
 bool liberar_paginas_del_ciclo(uint32_t jid);
 
+// Las paginas lockeadas pasan a ser del Planificador (syscalls de servicio)
+void ceder_paginas_lockeadas(void);
+
 
 /*
 Log obligatorio de cada acceso a memoria, uno por cada pedazo [dir_fisica; tamanio]:
