@@ -113,12 +113,42 @@ void* atender_planificador(void* planificador){
             break;
 
         }
-        case ESCRIBIR_DATO:{
-            break;
+        */
+        case ESCRIBIR_MEMORIA:{
 
+            uint32_t jid        = buffer_read_uint32(payload);
+            uint32_t dir_fisica = buffer_read_uint32(payload);
+
+            uint32_t tamanio;
+            void* contenido = buffer_read_bloque(payload, &tamanio);   
+
+            int motivo = -1;                                           
+            bool escribio = escribir_memoria(jid, dir_fisica, contenido, tamanio, &motivo);
+
+            free(contenido);                                            
+
+            retardo_memoria();                                          
+
+            t_paquete* respuesta;
+
+            if(escribio){
+                respuesta = crear_paquete(ESCRIBIR_MEMORIA_OK);         
+            } else {
+                log_error(placa_logger, "Escritura inválida - JID: %u - Dir. Física: %u - Tamaño: %u - Motivo: %d", jid, dir_fisica, tamanio, motivo);
+                respuesta = crear_paquete(MEMORIA_ERROR);               
+                buffer_add_uint32(respuesta->buffer, motivo);
+            }
+
+            int validar = enviar_paquete(socket_cliente, respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder ESCRIBIR_MEMORIA al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
+            break;
         }
 
-        */
 
         // [Enunciado pág. 23 - Finalización de Job]
         // Solo se recibe un JID. Se liberan todos los marcos que tuviera ocupados, el lugar
