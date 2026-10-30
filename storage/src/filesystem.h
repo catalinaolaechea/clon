@@ -6,6 +6,7 @@
 #include <stdbool.h>      
 #include <stdint.h>       // los tipos de ancho fijo uint8_t y uint32_t
 #include <commons/log.h>  // el tipo "t_log" para poder loguear
+#include <commons/collections/list.h>  // 
 #include "config.h"       // el tipo "t_storage_config", porque de ahi salen TAM_BLOQUE, CANT_BLOQUES y demas
 
 
@@ -32,7 +33,7 @@ typedef struct {
 } t_storage_superbloque;
 
 
-//! ─────────────────────────── FILE ALLOCATION TABLE ───────────────────────────
+//! ─────────────────────────── FILE ALLOCATION TABLE ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 // Una entrada uint32_t por CADA bloque del filesystem. Cada entrada dice cual es el bloque siguiente del checkpoint al que pertenece: es una lista enlazada, pero guardada en una tabla aparte en vez de dentro de los datos
 
 #define STORAGE_FAT_BYTES_ENTRADA  4  // sizeof(uint32_t), lo dejamos con nombre para que se lea el "por que" en las cuentas
@@ -45,7 +46,11 @@ typedef struct {
 #define STORAGE_FAT_MASCARA     0x0FFFFFFFu
 
 
-//! ─────────────────────────── ENTRADA DE DIRECTORIO ───────────────────────────
+// CHECKPOINT (Archivo): Es un archivo en nuestro filesystem para Storage un checkpoint puede ser un nombre (ej. modelo7) o un contenido (bytes que se guardan en bloques de datos, si no entran en un bloque unico ocupan varios encadenados por la FAT)
+// ENTRADA DE DIRECTORIO: Ficha de 32 bytes una por cada checkpoint que nos dice el contenido que esta repartido en bloques, si ej. "modelo7" existe, cuanto pesa y donde empieza, una entrada "libre" es una ficha vacia disponible para un checkpoint nuevo (al formatear hay 128 libres)
+// ambos como juegan en el enunciado: "Contiene una entrada por cada Checkpoint", los Jobs entrenan modelos, cada uno guarda su proceso con syscall "SAVE_CHECKPOINT modelo7", ese guardado viaja Core -> Planificador -> Storage (este ultimo persiste en el volumen), otro Job lo puede cargar con "LOAD"
+
+//! Entrada de directorio "en disco" (REPASAR DESPUES Y TERMINAR)
 // Un unico directorio raiz, con una entrada por checkpoint, pegadas una atras de la otra desde el primer byte de la region. Cada entrada pesa 32 bytes EXACTOS
 
 #define STORAGE_DIR_OFF_ESTADO        0   // byte 0:      uint8_t, 0 = libre / 1 = ocupada
@@ -59,8 +64,17 @@ typedef struct {
 #define STORAGE_DIR_ESTADO_LIBRE    0
 #define STORAGE_DIR_ESTADO_OCUPADA  1
 
+//! Entrada de directorio "en memoria", misma idea que planteamos en superbloque, aca vamos a terminar almacenando lo que leimos del disco 
+typedef struct {
+   uint32_t nro_entrada;  // en que lugar del directorio esta (0..127), en el disco NO esta escrito, sale de la posicion que calculamos con "storage_directorio_listar()"
+   bool     ocupada;  // si esta en 0 esta libre, 1 ocupada 
+   char     nombre[STORAGE_DIR_BYTES_NOMBRE];  // le damos lugar hasta 22 caracteres + '\0'
+   uint32_t tamanio;  // bytes 24..27 (que nos da el enunciado que debe ser asi): cuanto pesa el checkpoint 
+   uint32_t primer_bloque;  // bytes 28..31: donde arranca la cadena en la FAT 
+} t_storage_entrada_directorio;
 
-//! ─────────────────────────── LAYOUT DEL VOLUMEN ───────────────────────────
+
+//! ─────────────────────────── LAYOUT DEL VOLUMEN ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 // Todas las cuentas del reparto de bloques, resueltas UNA sola vez al arrancar y guardadas acá. La idea es no andar recalculando "donde empieza el directorio" cada vez que se lo necesita, y sobre todo no hardcodear ningun numero: todo sale del .config
 
 typedef struct {
@@ -85,7 +99,7 @@ typedef struct {
 } t_storage_layout;
 
 
-//! ─────────────────────────── FUNCIONES PURAS (las cuentas) ───────────────────────────
+//! ─────────────────────────── FUNCIONES PURAS (las cuentas) ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 //! "pura" quiere decir que con los mismos 3 numeros de entrada devuelve siempre lo mismo, sin leer ni escribir nada de afuera: ni archivos, ni variables globales, ni el .config. Eso la hace trivial de testear a mano (le paso 1024/64/64 y tiene que darme 64 de FAT y 895 de datos) y es el motivo por el que recibe los valores por parametro en vez de ir a buscarlos al config
 
 t_storage_layout storage_layout_calcular(uint32_t cant_bloques, uint32_t tam_bloque, uint32_t bloques_directorio);
@@ -97,7 +111,7 @@ bool storage_layout_es_valido(t_storage_layout layout, t_log* logger);
 void storage_layout_loguear(t_storage_layout layout, t_log* logger);
 
 
-//! ─────────────────────────── FUNCIONES CON ESTADO (el disco) ───────────────────────────
+//! ─────────────────────────── FUNCIONES CON ESTADO (el disco) ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 
 // Punto de entrada del modulo. Si el archivo del volumen no existe lo crea y lo formatea (superbloque + FAT con los datos libres + directorio con todas las entradas libres). Si YA existe NO lo toca: valida la firma y que el .config coincida con lo que dice el superbloque. Devuelve false si algo no cierra
 bool storage_filesystem_iniciar(t_storage_config* config, t_log* logger);
@@ -113,5 +127,7 @@ bool storage_bloque_leer(uint32_t nro_bloque, void* destino);
 bool storage_bloque_escribir(uint32_t nro_bloque, const void* origen);
 
 bool storage_superbloque_leer(t_storage_superbloque* superbloque);
+
+t_list* storage_directorio_listar(void);
 
 #endif // para cerrar el #ifndef

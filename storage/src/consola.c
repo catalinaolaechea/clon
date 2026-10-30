@@ -212,12 +212,25 @@ static void comando_info(void) {
 
 //! para comando LS arma una tabla de 3 partes (encabezado, fila y resumen), todavia no lee el directorio muestra una fila inventada para que se vea el formato 
 static void comando_ls(void) {
-   t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba 
+   t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba
 
-   imprimir_encabezado_ls();  // mostramos los titulos 
-   imprimir_entrada_ls(0, true, "modelo7", 40, 130);  // esta es la fila inventada para ver el formato 
-   imprimir_resumen_ls(0, layout.entradas_directorio);  // de 0 a 128 
-   printf("(la fila de arriba es de ejemplo: la lectura real del directorio llega en SIS-79)\n");
+   t_list* ocupadas = storage_directorio_listar();
+
+   if (ocupadas == NULL) {
+      printf("No se pudo leer el directorio del volumen (ver el log)\n");
+      return;
+   }
+
+   imprimir_encabezado_ls();  // mostramos los titulos
+
+   for (int i = 0; i < list_size(ocupadas); i++) {
+      t_storage_entrada_directorio* entrada = list_get(ocupadas, i);
+      imprimir_entrada_ls(entrada->nro_entrada, entrada->ocupada, entrada->nombre, entrada->tamanio, entrada->primer_bloque);
+   }
+
+   imprimir_resumen_ls(list_size(ocupadas), layout.entradas_directorio);  // de 0 a 128
+
+   list_destroy_and_destroy_elements(ocupadas, free);
 }
 
 //! recibe los 4 campos del superbloque y los imprime uno por uno por renglon, con nombre valor y unidad, con el issue-79 los lee del disco, pero el formato siempre es este 
