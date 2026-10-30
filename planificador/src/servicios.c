@@ -6,6 +6,7 @@
 #include "cliente_placa.h"
 #include "corto_plazo.h"
 #include "jobs.h"
+#include "loader.h"
 
 #define ERROR_SEM_INIT -1
 
@@ -91,12 +92,6 @@ void servicio_encolar(t_servicio* servicio, t_pedido_servicio* pedido) {
     pthread_mutex_unlock(&servicio->mutex);
 
     sem_post(&servicio->pedidos_pendientes);
-}
-
-// TODO SIS-76: leer el archivo de PATH_DATOS, escribirlo en la memoria del Job y esperar RETARDO_LOADER
-static bool operar_loader(t_pedido_servicio* pedido) {
-    log_warning(planificador_logger, "Loader del Job %u: operacion pendiente (SIS-76)", pedido->pcb->jid);
-    return true;
 }
 
 // TODO SIS-77: pedir los caracteres por teclado y escribirlos en la memoria del Job
