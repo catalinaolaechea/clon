@@ -2,8 +2,12 @@
 #define DEVOLUCION_H
 
 #include <utils/serializacion.h>
+#include "pcb.h"  // t_pcb y t_contexto
 
 #define LOG_DESALOJO_QUANTUM "## (%u) - Desalojado por fin de quantum"
+
+// Libera el Core y guarda el contexto en la PCB. NULL si la devolucion no corresponde y se descarta.
+t_pcb* recibir_job_de_core(int identificador_core, uint32_t jid, t_contexto* contexto);
 
 // DEVOLUCION_JOB = { uint32 jid, contexto, uint8 motivo } por el canal dispatch del Core.
 // Guarda el contexto en la PCB, libera el Core y resuelve el Job segun el motivo.

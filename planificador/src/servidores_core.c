@@ -214,6 +214,11 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
         case DEVOLUCION_PAGE_FAULT:
             recibir_devolucion_page_fault(identificador, buffer);
             break;
+        case SYSCALL_LOAD_BATCH:
+        case SYSCALL_LABEL:
+        case SYSCALL_REPORT:
+            atender_syscall_servicio(identificador, op_code, buffer);
+            break;
         default:
             log_warning(planificador_logger, "Codigo de operacion desconocido recibido: %u", op_code);
     }
