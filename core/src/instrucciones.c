@@ -100,7 +100,7 @@ static bool parsear_numero(const char* texto, uint32_t* resultado) {
 }
 
 // Un operando "Valor" puede ser un numero o el nombre de un registro (su contenido).
-static bool valor_de(t_contexto* contexto, const char* operando, uint32_t* valor) {
+bool valor_de(t_contexto* contexto, const char* operando, uint32_t* valor) {
     uint32_t* registro = registro_por_nombre(contexto, operando);
     if (registro != NULL) {
         *valor = *registro;
