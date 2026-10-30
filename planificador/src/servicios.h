@@ -41,4 +41,16 @@ void servicio_destruir(t_servicio* servicio);
 // El Job del pedido ya tiene que estar en BLOCKED: el hilo del servicio lo pasa a READY al terminar.
 void servicio_encolar(t_servicio* servicio, t_pedido_servicio* pedido);
 
+typedef enum {
+    SERVICIO_LOADER,
+    SERVICIO_LABELER,
+    SERVICIO_LOGGER,
+    CANTIDAD_SERVICIOS
+} t_servicio_id;
+
+void inicializar_servicios(void);
+void iniciar_servicios(void);
+void destruir_servicios(void);
+void encolar_en_servicio(t_servicio_id id, t_pedido_servicio* pedido);
+
 #endif

@@ -92,3 +92,45 @@ void servicio_encolar(t_servicio* servicio, t_pedido_servicio* pedido) {
 
     sem_post(&servicio->pedidos_pendientes);
 }
+
+// TODO SIS-76: leer el archivo de PATH_DATOS, escribirlo en la memoria del Job y esperar RETARDO_LOADER
+static bool operar_loader(t_pedido_servicio* pedido) {
+    log_warning(planificador_logger, "Loader del Job %u: operacion pendiente (SIS-76)", pedido->pcb->jid);
+    return true;
+}
+
+// TODO SIS-77: pedir los caracteres por teclado y escribirlos en la memoria del Job
+static bool operar_labeler(t_pedido_servicio* pedido) {
+    log_warning(planificador_logger, "Labeler del Job %u: operacion pendiente (SIS-77)", pedido->pcb->jid);
+    return true;
+}
+
+// TODO SIS-78: leer la memoria del Job y escribirla en hexa en PATH_REPORTES
+static bool operar_logger(t_pedido_servicio* pedido) {
+    log_warning(planificador_logger, "Logger del Job %u: operacion pendiente (SIS-78)", pedido->pcb->jid);
+    return true;
+}
+
+static t_servicio servicios[CANTIDAD_SERVICIOS];
+
+void inicializar_servicios(void) {
+    servicio_inicializar(&servicios[SERVICIO_LOADER], "Loader", operar_loader);
+    servicio_inicializar(&servicios[SERVICIO_LABELER], "Labeler", operar_labeler);
+    servicio_inicializar(&servicios[SERVICIO_LOGGER], "Logger", operar_logger);
+}
+
+void iniciar_servicios(void) {
+    for (int i = 0; i < CANTIDAD_SERVICIOS; i++) {
+        servicio_iniciar(&servicios[i]);
+    }
+}
+
+void destruir_servicios(void) {
+    for (int i = 0; i < CANTIDAD_SERVICIOS; i++) {
+        servicio_destruir(&servicios[i]);
+    }
+}
+
+void encolar_en_servicio(t_servicio_id id, t_pedido_servicio* pedido) {
+    servicio_encolar(&servicios[id], pedido);
+}
