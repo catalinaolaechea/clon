@@ -126,12 +126,43 @@ void* atender_core(void* args){
         // [Enunciado pág. 23 - Escritura de datos] (Check 3)
         // Mismos parámetros que la lectura, más el contenido a escribir.
         // Log obligatorio (pág. 24): "## JID: <JID> - <Lectura/Escritura> - Dir. Física: <DIRECCION_FISICA> - Tamaño: <TAMAÑO>"
-        /*case LEER_DATO:{
+        
+        case LEER_MEMORIA:{
 
+
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_fisca = buffer_read_uint32(payload);
+            uint32_t tamanio = buffer_read_uint32(payload);
+
+            int motivo = -1;
+
+            void* datos = leer_memoria(jid,dir_fisca,tamanio,&motivo);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            if(datos!= NULL){
+                respuesta = crear_paquete(RESPUESTA_LEER_MEMORIA);
+                buffer_add_bloque(respuesta->buffer,datos,tamanio);
+                free(datos);
+            }else{
+                log_error(placa_logger, "Lectura invalida - JID %u - Dir. Fisica: %u - Tamaño %u - Motivo %d", jid,dir_fisca,tamanio,motivo);
+                respuesta = crear_paquete(MEMORIA_ERROR);
+                buffer_add_uint32(respuesta->buffer,motivo);
+            
+            }
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder LEER_MEMORIA al Core %d",core->id_core);
+            }
+
+            eliminar_paquete(respuesta);
             break;
 
         }
-        */
 
         case ESCRIBIR_MEMORIA:{
             uint32_t jid = buffer_read_uint32(payload);
@@ -158,7 +189,6 @@ void* atender_core(void* args){
             
                 respuesta = crear_paquete(MEMORIA_ERROR);
                 buffer_add_uint32(respuesta->buffer,motivo);
-
             }
 
             int validar = enviar_paquete(socket_cliente,respuesta);
