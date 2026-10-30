@@ -197,12 +197,17 @@ static void mostrar_comandos(void) {
    printf("  %s\n", USO_RM);
 }
 
-//! aca vamos a ir teniendo los comandos definidos que hace cada uno. Esta cuando usamos "INFO" en terminal (por ahora lo lee de disco) agarra los valores que calculo issue-29 que salen del .config y se los pasa a "imprimir_superbloque()" para que se vea en ese formato 
+//! COMANDOS DE CONSOLA STORAGE: Esta cuando usamos "INFO" en terminal, lee del disco, guarda en una estructura para los superbloques en memoria y termina mostrandolos
 static void comando_info(void) {
-   t_storage_layout layout = storage_filesystem_layout();  // aca guardamos una COPIA del layout que calculo el SIS-29 al arrancar (struct con todas las cuentas del volumen)
+   t_storage_superbloque superbloque;  // instancia de superbloque en memoria 
 
-   imprimir_superbloque(STORAGE_FS_FIRMA, layout.tam_bloque, layout.cant_bloques, layout.bloques_directorio);  // imprimimos ese superbloque con "imprimir_superbloque()" que mas abajo la definimos denotando las partes del volumen (tamaño del bloque, cantidad de bloques y directorio de bloques), con la cte que es "FAT32_TRAIN"
-   printf("(valores del .config: la lectura real del bloque 0 llega en SIS-79)\n");
+   // caso que no se pueda leer dicho superbloque del disco directamente (es raro, o falla el malloc al pedir un buffer del cual guardar los datos leidos del disco para dsp guardar en estructura de suprebloque en memoria, si volumen no esta abierto en "acceder_bloque()", bloque fuera de rango, o errores propios del fseek/fread)
+   if (!storage_superbloque_leer(&superbloque)) {  
+      printf("No se pudo leer el superbloque del volumen (ver el log)\n");  // cualquier cosa notificamos y guardamos en log de errores segun que fue pasando en cada caso 
+      return;
+   }
+
+   imprimir_superbloque(superbloque.firma, superbloque.tam_bloque, superbloque.cant_bloques, superbloque.bloques_directorio);  // va mostrando ahora con los datos guardados en la estructura pensada para memoria de un superbloque de lo leido en disco 
 }
 
 //! para comando LS arma una tabla de 3 partes (encabezado, fila y resumen), todavia no lee el directorio muestra una fila inventada para que se vea el formato 

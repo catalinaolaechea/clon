@@ -1,10 +1,11 @@
 #include "filesystem.h"  // el header de arriba: constantes del formato, el struct del layout y las firmas que definimos aca
 
-#include <stdio.h>    // entrada salida sobre archivos (fopen, fseek, fread, fwrite, fclose)
-#include <stdlib.h>   // memoria (malloc, calloc, free)
-#include <string.h>   // manejo de memoria y cadenas (memcpy, memcmp, memset, strerror)
-#include <errno.h>    // la variable "errno" para saber POR QUE fallo una syscall
-#include <unistd.h>   // estandares de UNIX, de aca sacamos "access()" y "usleep()"
+#include <stdio.h>           // entrada salida sobre archivos (fopen, fseek, fread, fwrite, fclose)
+#include <stdlib.h>          // memoria (malloc, calloc, free)
+#include <string.h>          // manejo de memoria y cadenas (memcpy, memcmp, memset, strerror)
+#include <errno.h>           // la variable "errno" para saber POR QUE fallo una syscall
+#include <unistd.h>          // estandares de UNIX, de aca sacamos "access()" y "usleep()"
+#include "sincronizacion.h"  // es para reconocer el "mutex_filesystem", como vamos a tener que usar un mutex relacionado a leer bloques para distintos hilos 
 
 
 //! ─────────────────────────── ESTADO DEL MODULO ───────────────────────────
@@ -407,4 +408,33 @@ void storage_filesystem_finalizar(void) {
 
 t_storage_layout storage_filesystem_layout(void) {
    return fs.layout;  // por copia: el que llama puede mirarlo todo lo que quiera sin poder modificar el nuestro
+}
+
+//! esta funcion lo que hace es agarrar los datos que leimos del superbloque en disco para traducirlo hacia el superbloque en memoria y el CPU pueda laburar con el. Lo termina ejecutando el comando "INFO" en la consola de storage 
+bool storage_superbloque_leer(t_storage_superbloque* superbloque) {
+   uint8_t* bloque = malloc(fs.layout.tam_bloque);  // pedimos un buffer del tamaño de un bloque entero, guiandonos del tamaño final que tendra pidiendoselo a la estructura del layout (calculo final). Ademas la funcion "storage_bloque_leer()" siempre lee de a bloques enteros usando dentro la funcion "acceder_bloque" que es del issue-29   
+
+   if (bloque == NULL) {  // caso puramente del malloc segun lo que devolvio, si es NULL (proceso tiene tope de memoria, o si no queda RAM), ya q preguntando a layout tamaño siempre habra un valor
+      log_error(fs.logger, "No hay memoria para leer el superbloque (%u bytes).", fs.layout.tam_bloque);  
+      return false;
+   }
+
+   //! en Storage tenemos varios hilos tocando lo mismo (cond. carrera), el de la consola ejecutando el comando "INFO" y uno por cada conexion del Planificador, ademas que leer un bloque son 2 pasos primero fseek y fread, podria quedar el cursor mostrando basura. Solucionamos con un candado con una sola llave ("mutex_filesystem" todo lo relacionado a superbloque, FAT, directorio, datos)
+   pthread_mutex_lock(&mutex_filesystem);  // pedimos la llave, si esta libre la agarramos y vamos a seccion critica, si otro la tiene nos quedamos esperando sin gastar CPU hasta que se libere 
+   bool ok = storage_bloque_leer(0, bloque);  // entramos a seccion critica, ejecutamos "storage_bloque_leer()" y ningun otro hilo puede entrar hasta que liberemos. LEEMOS DE DISCO 
+   pthread_mutex_unlock(&mutex_filesystem);  // devuelvo la llave, si habia alguien esperando entra el 
+
+   // finalmente de lo que leimos en disco habiendolo sincronizado con un mutex por tener varios hilos en el mismo archivo, y lo tenemos guardado en buffer "bloque" lo terminamos traduciendo a la estructura de "superbloque" que tenemos en memoria y definimos en el header de filesystem 
+   if (ok) {
+      // al atributo "firma" le decimos "copia 11 bytes (fs_firma) empezando en bloque + 0 (sb_off)". Usamos "memcpy()" justamente porque tenemos que copiar un bloque de memoria
+      memcpy(superbloque->firma, bloque + STORAGE_SB_OFF_FIRMA, STORAGE_FS_FIRMA_BYTES);  
+      superbloque->firma[STORAGE_FS_FIRMA_BYTES] = '\0';  // una vez copiado los 11 bytes, volvemos a apuntar a la firma y le agregamos al lugar 12 un '\0' para que C lo trate como texto 
+      // demas atributos vamos leyendo del bloque y asignando usando "leer_uint32()" (que va leyendo de a bloques, x eso especificos de bloque, cant. bloques y bloques de directorio)
+      superbloque->tam_bloque = leer_uint32(bloque, STORAGE_SB_OFF_TAM_BLOQUE);  
+      superbloque->cant_bloques = leer_uint32(bloque, STORAGE_SB_OFF_CANT_BLOQUES);
+      superbloque->bloques_directorio = leer_uint32(bloque, STORAGE_SB_OFF_BLOQUES_DIRECTORIO);
+   }
+
+   free(bloque);  // finalmente como el buffer que pedimos lo tenemos que liberar una vez que ya lo asignamos a la estructura que tenemos para guardarlo en memoria lo que leimos del disco, liberamos
+   return ok;
 }
