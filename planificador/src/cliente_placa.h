@@ -20,4 +20,8 @@ bool placa_cargar_pagina(uint32_t jid, uint32_t nro_pagina);
 // false si la Placa responde MEMORIA_ERROR o un bloque de otro tamaño.
 bool placa_leer_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* destino);
 
+// Escribe en la Placa un pedazo de la memoria del Job (no cruza de marco) con los bytes de 'origen'.
+// false si la Placa responde MEMORIA_ERROR.
+bool placa_escribir_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* origen);
+
 #endif

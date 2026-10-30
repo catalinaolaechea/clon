@@ -253,3 +253,56 @@ bool placa_leer_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* destino)
     eliminar_buffer(buffer);
     return ok;
 }
+
+bool placa_escribir_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* origen) {
+    log_info(planificador_logger, LOG_ACCESO_MEMORIA, jid, "Escritura", pedazo->direccion, pedazo->tamanio);
+
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(ESCRIBIR_MEMORIA);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, pedazo->direccion);
+    buffer_add_bloque(paquete->buffer, origen, pedazo->tamanio);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar ESCRIBIR_MEMORIA del JID %u (direccion %u) a la Placa", jid, pedazo->direccion);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio ESCRIBIR_MEMORIA del JID %u (direccion %u)", jid, pedazo->direccion);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio ESCRIBIR_MEMORIA del JID %u (direccion %u)", jid, pedazo->direccion);
+        return false;
+    }
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);  // la respuesta ya salio del socket
+
+    bool ok = false;
+
+    if (op_code == ESCRIBIR_MEMORIA_OK) {
+        ok = true;
+    } else if (op_code == MEMORIA_ERROR && buffer->size == sizeof(uint32_t)) {
+        log_error(planificador_logger, "La Placa rechazo la escritura del JID %u (direccion %u): motivo %u", jid, pedazo->direccion, buffer_read_uint32(buffer));
+    } else {
+        log_error(planificador_logger, "La Placa respondio %u a ESCRIBIR_MEMORIA del JID %u (direccion %u)", op_code, jid, pedazo->direccion);
+    }
+
+    eliminar_buffer(buffer);
+    return ok;
+}
