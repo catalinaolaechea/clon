@@ -30,6 +30,7 @@ typedef struct {
     bool lockeada;
     bool uso;
     bool modificado;
+    bool en_offload;
     uint64_t ultimo_acceso;
     uint32_t slot_offload;
 }t_entrada_pagina;
