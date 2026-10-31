@@ -7,6 +7,7 @@
 #include "corto_plazo.h"
 #include "jobs.h"
 #include "loader.h"
+#include "logger.h"
 
 #define ERROR_SEM_INIT -1
 
@@ -100,15 +101,10 @@ static bool operar_labeler(t_pedido_servicio* pedido) {
     return true;
 }
 
-// TODO SIS-78: leer la memoria del Job y escribirla en hexa en PATH_REPORTES
-static bool operar_logger(t_pedido_servicio* pedido) {
-    log_warning(planificador_logger, "Logger del Job %u: operacion pendiente (SIS-78)", pedido->pcb->jid);
-    return true;
-}
-
 static t_servicio servicios[CANTIDAD_SERVICIOS];
 
 void inicializar_servicios(void) {
+    inicializar_reportes();
     servicio_inicializar(&servicios[SERVICIO_LOADER], "Loader", operar_loader);
     servicio_inicializar(&servicios[SERVICIO_LABELER], "Labeler", operar_labeler);
     servicio_inicializar(&servicios[SERVICIO_LOGGER], "Logger", operar_logger);
@@ -124,6 +120,7 @@ void destruir_servicios(void) {
     for (int i = 0; i < CANTIDAD_SERVICIOS; i++) {
         servicio_destruir(&servicios[i]);
     }
+    destruir_reportes();
 }
 
 void encolar_en_servicio(t_servicio_id id, t_pedido_servicio* pedido) {
