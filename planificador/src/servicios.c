@@ -7,6 +7,7 @@
 #include "corto_plazo.h"
 #include "jobs.h"
 #include "loader.h"
+#include "labeler.h"
 #include "logger.h"
 
 #define ERROR_SEM_INIT -1
@@ -93,12 +94,6 @@ void servicio_encolar(t_servicio* servicio, t_pedido_servicio* pedido) {
     pthread_mutex_unlock(&servicio->mutex);
 
     sem_post(&servicio->pedidos_pendientes);
-}
-
-// TODO SIS-77: pedir los caracteres por teclado y escribirlos en la memoria del Job
-static bool operar_labeler(t_pedido_servicio* pedido) {
-    log_warning(planificador_logger, "Labeler del Job %u: operacion pendiente (SIS-77)", pedido->pcb->jid);
-    return true;
 }
 
 static t_servicio servicios[CANTIDAD_SERVICIOS];
