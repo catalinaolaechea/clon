@@ -1,5 +1,6 @@
 #include "memoria.h"
 #include "jobs.h" //buscar_job
+#include "offload.h"
 
 //memoria fisica
 void* memoria = NULL;
@@ -282,5 +283,210 @@ void* leer_memoria(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* mot
     return copia;
 
 }
+
+// Busca "cantidad" páginas libres seguidas en la tabla del Job
+static uint32_t buscar_hueco(t_job_placa* job, uint32_t cantidad){
+
+    uint32_t total = list_size(job->tabla_paginas);
+    uint32_t libres_seguidas = 0;
+
+    for (uint32_t i = 0; i < total; i++){
+
+        t_entrada_pagina* entrada = list_get(job->tabla_paginas, i);
+
+        if(entrada->slot_offload == SLOT_SIN_ASIGNAR){
+            libres_seguidas++;
+
+            if(libres_seguidas == cantidad){
+                return i - cantidad + 1;
+                //alcanzo el hueco, el hueco empieza aca
+            }
+        }else { 
+            libres_seguidas = 0;
+        }
+    }
+
+    // no hay hueco donde entre al final
+    return total;
+
+}
+
+static void preparar_paginas(t_job_placa* job, uint32_t pagina_inicio, uint32_t cantidad, uint32_t* slots){
+
+    for(uint32_t i = 0; i < cantidad; i++){
+
+        uint32_t nro_pagina = pagina_inicio + i;
+
+        if(nro_pagina < (uint32_t) list_size(job->tabla_paginas)){
+            
+            t_entrada_pagina* entrada = list_get(job->tabla_paginas,nro_pagina);
+
+            memset(entrada, 0, sizeof(t_entrada_pagina));
+
+            entrada->slot_offload = slots[i];
+
+        }else{
+            t_entrada_pagina* entrada = calloc(1, sizeof(t_entrada_pagina));
+
+            entrada->slot_offload = slots[i];
+
+            list_add(job->tabla_paginas,entrada);
+        }
+
+    }
+
+}
+
+static void registrar_asignacion (t_job_placa* job, uint32_t inicio, uint32_t cantidad, uint32_t tamanio){
+
+    t_asignacion* asignacion = malloc(sizeof(t_asignacion));
+    asignacion->pagina_inicio = inicio;
+    asignacion->cant_paginas = cantidad;
+    asignacion->tamanio = tamanio;
+    list_add(job->asignaciones,asignacion);
+}
+
+static bool asignar_en_job(uint32_t jid, uint32_t cant_paginas, uint32_t tamanio, uint32_t* slots, uint32_t* dir_logica){
+
+    t_job_placa* job = buscar_job(jid);
+
+    if(job == NULL){
+        log_error(placa_logger, "ALLOC de un JID inexistente: %u", jid);
+        return false;
+    }else if(!reservar_slots(cant_paginas,slots)){ 
+        log_warning(placa_logger, "ALLOC sin lugar en el Offload - JID: %u - Páginas: %u", jid, cant_paginas);
+        return false;
+    }else {
+        
+        uint32_t pagina_inicio = buscar_hueco(job,cant_paginas);
+
+        preparar_paginas(job,pagina_inicio,cant_paginas,slots);
+
+        registrar_asignacion(job,pagina_inicio,cant_paginas,tamanio);
+
+        *dir_logica = pagina_inicio * TAM_PAGINA;
+
+        return true;
+
+    }
+
+}
+
+// [Enunciado pág. 22 - Asignación de espacio]
+// Agrega al Job las páginas para "tamanio" bytes (no presentes: bajo demanda), les reserva lugar en
+// el Offload y devuelve en *dir_logica dónde empieza. Si no se puede, devuelve false sin tocar nada.
+// Log obligatorio (pág. 24): "## JID: <JID> - Asignación - Dirección Lógica: <DIR> - Tamaño: <TAM>"
+bool asignar_espacio(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica){
+
+    if(tamanio == 0){
+        log_error(placa_logger, "ALLOC de 0 bytes - JID %u", jid);
+        return false;
+    }
+    //paginas necesarias, redondeado para arriba
+
+    uint32_t cant_paginas = tamanio / TAM_PAGINA + (tamanio % TAM_PAGINA !=0);
+
+    if(cant_paginas > cant_slots){ 
+        log_error(placa_logger, "ALLOC más grande que el Offload - JID: %u - Tamaño: %u", jid, tamanio);
+        return false;
+    }
+
+    //donde reservar_slots deja los numeros de slots
+    uint32_t* slots = malloc(cant_paginas* sizeof(uint32_t));
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        bool asignado = asignar_en_job(jid,cant_paginas,tamanio,slots,dir_logica);
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    free(slots);
+
+    if(asignado)
+        log_info(placa_logger, "## JID: %u - Asignación - Dirección Lógica: %u - Tamaño: %u", jid, *dir_logica, tamanio);
+
+    return asignado;
+
+}
+
+
+//Liberar cantidad de paginas desde inicio 
+static void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad){
+
+    for(uint32_t i = 0; i<cantidad; i++ ){
+        t_entrada_pagina* entrada = list_get(job->tabla_paginas, inicio + i);
+    
+        if(entrada->presente){
+            marcos[entrada->marco].ocupado=false;
+        }
+
+        liberar_slot(entrada->slot_offload);
+
+        memset(entrada, 0, sizeof(t_entrada_pagina));
+        entrada->slot_offload = SLOT_SIN_ASIGNAR;
+
+    }
+
+}
+
+static bool liberar_en_job(uint32_t jid, uint32_t dir_logica, uint32_t* tamanio){
+
+    t_job_placa* job = buscar_job(jid);
+
+    if(job == NULL){
+        log_warning(placa_logger, "FREE de un JID inexistente: %u",jid);
+
+        return false;
+    }
+
+    bool empieza_ahi(void* elemento){
+        t_asignacion* asignacion = elemento;
+        return asignacion->pagina_inicio * TAM_PAGINA == dir_logica;
+    }
+
+    t_asignacion* asignacion = list_find(job->asignaciones, empieza_ahi);
+
+    if(asignacion == NULL){
+
+        log_warning(placa_logger, "FREE de una dirección que no es inicio de ninguna asignación - JID: %u - Dirección Lógica: %u", jid, dir_logica);
+        return false;
+    }
+
+    liberar_paginas(job,asignacion->pagina_inicio, asignacion->cant_paginas);
+
+    *tamanio = asignacion->tamanio;
+
+    list_remove_element(job->asignaciones, asignacion);
+
+    free(asignacion);
+
+    return true;
+
+}
+
+// [Enunciado pág. 22 - Liberación de espacio]
+// Siempre se responde FREE_OK, aunque no haya nada que liberar (D4).
+// Log obligatorio (pág. 24): "## JID: <JID> - Liberación - Dirección Lógica: <DIR> - Tamaño: <TAM>"
+
+void liberar_espacio(uint32_t jid, uint32_t dir_logica){
+
+    uint32_t tamanio = 0;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        bool liberado = liberar_en_job(jid, dir_logica, &tamanio);
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(liberado)
+        log_info(placa_logger, "## JID: %u - Liberación - Dirección Lógica: %u - Tamaño: %u", jid, dir_logica, tamanio);
+
+
+}
+
 
 

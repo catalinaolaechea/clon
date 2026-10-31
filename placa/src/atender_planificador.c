@@ -109,6 +109,40 @@ void* atender_planificador(void* planificador){
 
         // [Enunciado pág. 23 - Lectura / Escritura de datos] (Check 3)
         // Las usa el Planificador en las syscalls de memoria (LOAD_BATCH, LABEL, REPORT y checkpoints).
+        
+        case ALLOC: {
+
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t tamanio = buffer_read_uint32(payload);
+
+            uint32_t dir_logica = 0;
+
+            bool asignado = asignar_espacio(jid,tamanio,&dir_logica);
+
+            retardo_memoria();
+
+            t_paquete* respuesta;
+
+            if(asignado){
+                respuesta = crear_paquete(ALLOC_OK);
+                buffer_add_uint32(respuesta->buffer,dir_logica);
+            } else {
+                respuesta = crear_paquete(ALLOC_ERROR);
+            }
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder ALLOC al planificador");
+            }
+
+            eliminar_paquete(respuesta);
+
+            break;
+        }
+        
+        
+        
         case LEER_MEMORIA:{
 
             uint32_t jid = buffer_read_uint32(payload);
@@ -144,6 +178,29 @@ void* atender_planificador(void* planificador){
             eliminar_paquete(respuesta);
             break;
 
+        }
+
+        case FREE:{
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_logica = buffer_read_uint32(payload);
+
+            //si la dirección no es inicio de nignuna asignación, solo deja un warning
+            liberar_espacio(jid,dir_logica);
+
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(FREE_OK);
+
+            int validar= enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder FREE al planificador");
+
+            }
+
+            eliminar_paquete(respuesta);
+
+            break;
         }
         
         case ESCRIBIR_MEMORIA:{

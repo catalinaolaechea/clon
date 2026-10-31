@@ -70,6 +70,12 @@ bool escribir_memoria(uint32_t jid, uint32_t dir_fisica, void* contenido, uint32
 // desde dir_fisica, o NULL si el pedido es inválido (en *motivo queda el t_memoria_error).
 void* leer_memoria(uint32_t jid, uint32_t dir_fisica, uint32_t tamanio, int* motivo);
 
+// [Enunciado pág. 22 - Asignación de espacio] Devuelve false si no se pudo (ALLOC 0, JID inexistente
+// o sin lugar en el Offload): en ese caso no se tocó nada. Toma los mutex adentro.
+bool asignar_espacio(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica);
 
+// [Enunciado pág. 22 - Liberación de espacio] Libera la asignación que empieza en dir_logica
+// (marcos y slots del Offload). Si no hay ninguna, solo loguea. Toma los mutex adentro.
+void liberar_espacio(uint32_t jid, uint32_t dir_logica);
 
 #endif
