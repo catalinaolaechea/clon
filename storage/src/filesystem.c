@@ -516,8 +516,12 @@ static void deserializar_entrada(const uint8_t* cruda, uint32_t nro_entrada, t_s
 }
 
 
-static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* bloque, t_storage_entrada_directorio* encontrada) {
+static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* bloque, t_storage_entrada_directorio* encontrada, uint32_t* libre) {
    uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;
+
+   if (libre != NULL) {
+      *libre = fs.layout.entradas_directorio;
+   }
 
    for (uint32_t i = 0; i < fs.layout.bloques_directorio; i++) {
       if (!storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque)) {
@@ -528,6 +532,9 @@ static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* b
          const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA;
 
          if (cruda[STORAGE_DIR_OFF_ESTADO] != STORAGE_DIR_ESTADO_OCUPADA) {
+            if (libre != NULL && *libre == fs.layout.entradas_directorio) {
+               *libre = i * entradas_por_bloque + j;
+            }
             continue;
          }
 
@@ -542,10 +549,16 @@ static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* b
    return STORAGE_LECTURA_NO_EXISTE;
 }
 
-static bool leer_entrada_fat(uint32_t nro_entrada, uint8_t* bloque, uint32_t* valor) {
+static void ubicar_entrada_fat(uint32_t nro_entrada, uint32_t* bloque_fat, uint32_t* offset) {
    uint64_t byte_en_fat = (uint64_t) nro_entrada * STORAGE_FAT_BYTES_ENTRADA;
-   uint32_t bloque_fat  = fs.layout.primer_bloque_fat + (uint32_t) (byte_en_fat / fs.layout.tam_bloque);
-   uint32_t offset      = (uint32_t) (byte_en_fat % fs.layout.tam_bloque);
+   *bloque_fat = fs.layout.primer_bloque_fat + (uint32_t) (byte_en_fat / fs.layout.tam_bloque);
+   *offset     = (uint32_t) (byte_en_fat % fs.layout.tam_bloque);
+}
+
+static bool leer_entrada_fat(uint32_t nro_entrada, uint8_t* bloque, uint32_t* valor) {
+   uint32_t bloque_fat;
+   uint32_t offset;
+   ubicar_entrada_fat(nro_entrada, &bloque_fat, &offset);
 
    if (!storage_bloque_leer(bloque_fat, bloque)) {
       return false;
@@ -623,7 +636,7 @@ t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t
 
    pthread_mutex_lock(&mutex_filesystem);
 
-   t_storage_resultado_lectura resultado = buscar_entrada(nombre, bloque, &entrada);
+   t_storage_resultado_lectura resultado = buscar_entrada(nombre, bloque, &entrada, NULL);
 
    if (resultado == STORAGE_LECTURA_OK) {
       a_leer = (max_bytes < entrada.tamanio) ? max_bytes : entrada.tamanio;
@@ -648,4 +661,288 @@ t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t
    *contenido = datos;
    *leidos    = a_leer;
    return STORAGE_LECTURA_OK;
+}
+
+
+static void serializar_entrada(const t_storage_entrada_directorio* entrada, uint8_t* cruda) {
+   memset(cruda, 0, STORAGE_DIR_BYTES_ENTRADA);
+
+   cruda[STORAGE_DIR_OFF_ESTADO] = entrada->ocupada ? STORAGE_DIR_ESTADO_OCUPADA : STORAGE_DIR_ESTADO_LIBRE;
+   memcpy(cruda + STORAGE_DIR_OFF_NOMBRE, entrada->nombre, strnlen(entrada->nombre, STORAGE_DIR_BYTES_NOMBRE - 1));
+
+   escribir_uint32(cruda, STORAGE_DIR_OFF_TAMANIO, entrada->tamanio);
+   escribir_uint32(cruda, STORAGE_DIR_OFF_PRIMER_BLOQUE, entrada->primer_bloque);
+}
+
+static bool escribir_entrada_directorio(const t_storage_entrada_directorio* entrada, uint8_t* bloque) {
+   uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;
+   uint32_t nro_bloque          = fs.layout.primer_bloque_directorio + entrada->nro_entrada / entradas_por_bloque;
+   uint32_t offset              = (entrada->nro_entrada % entradas_por_bloque) * STORAGE_DIR_BYTES_ENTRADA;
+
+   if (!storage_bloque_leer(nro_bloque, bloque)) {
+      return false;
+   }
+
+   serializar_entrada(entrada, bloque + offset);
+   return storage_bloque_escribir(nro_bloque, bloque);
+}
+
+static bool escribir_entrada_fat(uint32_t nro_entrada, uint32_t valor, uint8_t* bloque) {
+   uint32_t bloque_fat;
+   uint32_t offset;
+   ubicar_entrada_fat(nro_entrada, &bloque_fat, &offset);
+
+   if (!storage_bloque_leer(bloque_fat, bloque)) {
+      return false;
+   }
+
+   escribir_uint32(bloque, offset, valor);
+
+   if (!storage_bloque_escribir(bloque_fat, bloque)) {
+      return false;
+   }
+
+   log_info(fs.logger, "## Acceso FAT - Entrada: %u - Valor: 0x%08X", nro_entrada, valor);
+   return true;
+}
+
+static bool recorrer_cadena(const t_storage_entrada_directorio* entrada, uint8_t* bloque, uint32_t* cadena, uint32_t* largo) {
+   *largo = 0;
+
+   if (entrada->tamanio == 0) {
+      return true;
+   }
+
+   uint32_t actual = entrada->primer_bloque;
+
+   while (true) {
+      if (!es_bloque_de_datos(actual)) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": el bloque %u no es un bloque de datos (%u..%u).",
+                   entrada->nombre, actual, fs.layout.primer_bloque_datos, fs.layout.cant_bloques - 1);
+         return false;
+      }
+
+      if (*largo == fs.layout.bloques_datos) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": se recorrieron mas de %u bloques sin llegar al final (hay un ciclo en la FAT).",
+                   entrada->nombre, fs.layout.bloques_datos);
+         return false;
+      }
+
+      cadena[(*largo)++] = actual;
+
+      uint32_t valor;
+      if (!leer_entrada_fat(actual, bloque, &valor)) {
+         return false;
+      }
+
+      if ((valor & STORAGE_FAT_MASCARA) == STORAGE_FAT_EOF) {
+         return true;
+      }
+
+      actual = valor & STORAGE_FAT_MASCARA;
+   }
+}
+
+static bool buscar_bloques_libres(uint8_t* bloque, uint32_t cantidad, uint32_t* libres, uint32_t* encontrados) {
+   *encontrados = 0;
+
+   for (uint32_t nro = fs.layout.primer_bloque_datos; nro < fs.layout.cant_bloques && *encontrados < cantidad; nro++) {
+      uint32_t bloque_fat;
+      uint32_t offset;
+      ubicar_entrada_fat(nro, &bloque_fat, &offset);
+
+      if ((nro == fs.layout.primer_bloque_datos || offset == 0) && !storage_bloque_leer(bloque_fat, bloque)) {
+         return false;
+      }
+
+      uint32_t valor = leer_uint32(bloque, offset);
+      log_info(fs.logger, "## Acceso FAT - Entrada: %u - Valor: 0x%08X", nro, valor);
+
+      if ((valor & STORAGE_FAT_MASCARA) == STORAGE_FAT_LIBRE) {
+         libres[(*encontrados)++] = nro;
+      }
+   }
+
+   return true;
+}
+
+static t_storage_operacion* operacion_crear(void) {
+   t_storage_operacion* operacion = calloc(1, sizeof(t_storage_operacion));
+
+   if (operacion == NULL) {
+      return NULL;
+   }
+
+   operacion->fat     = list_create();
+   operacion->bloques = list_create();
+   return operacion;
+}
+
+static void mod_bloque_destruir(void* elemento) {
+   t_storage_mod_bloque* mod = elemento;
+   free(mod->contenido);
+   free(mod);
+}
+
+static void operacion_destruir(t_storage_operacion* operacion) {
+   if (operacion == NULL) {
+      return;
+   }
+
+   list_destroy_and_destroy_elements(operacion->fat, free);
+   list_destroy_and_destroy_elements(operacion->bloques, mod_bloque_destruir);
+   free(operacion);
+}
+
+static bool agregar_mod_fat(t_storage_operacion* operacion, uint32_t nro_entrada, uint32_t valor) {
+   t_storage_mod_fat* mod = malloc(sizeof(t_storage_mod_fat));
+
+   if (mod == NULL) {
+      log_error(fs.logger, "No hay memoria para anotar la modificacion de la entrada %u de la FAT.", nro_entrada);
+      return false;
+   }
+
+   mod->nro_entrada = nro_entrada;
+   mod->valor       = valor;
+   list_add(operacion->fat, mod);
+   return true;
+}
+
+static bool agregar_mod_bloque(t_storage_operacion* operacion, uint32_t nro_bloque, const uint8_t* datos, uint32_t cantidad) {
+   t_storage_mod_bloque* mod = malloc(sizeof(t_storage_mod_bloque));
+   uint8_t* contenido        = calloc(1, fs.layout.tam_bloque);
+
+   if (mod == NULL || contenido == NULL) {
+      log_error(fs.logger, "No hay memoria para anotar la escritura del bloque %u (%u bytes).", nro_bloque, fs.layout.tam_bloque);
+      free(mod);
+      free(contenido);
+      return false;
+   }
+
+   memcpy(contenido, datos, cantidad);
+   mod->nro_bloque = nro_bloque;
+   mod->contenido  = contenido;
+   list_add(operacion->bloques, mod);
+   return true;
+}
+
+static bool aplicar_operacion(const t_storage_operacion* operacion, uint8_t* bloque) {
+   for (int i = 0; i < list_size(operacion->bloques); i++) {
+      t_storage_mod_bloque* mod = list_get(operacion->bloques, i);
+
+      if (!storage_bloque_escribir(mod->nro_bloque, mod->contenido)) {
+         return false;
+      }
+      log_info(fs.logger, "## Acceso Bloque - Checkpoint: %s - Bloque: %u", operacion->entrada.nombre, mod->nro_bloque);
+   }
+
+   for (int i = 0; i < list_size(operacion->fat); i++) {
+      t_storage_mod_fat* mod = list_get(operacion->fat, i);
+
+      if (!escribir_entrada_fat(mod->nro_entrada, mod->valor, bloque)) {
+         return false;
+      }
+   }
+
+   return escribir_entrada_directorio(&operacion->entrada, bloque);
+}
+
+static t_storage_resultado_escritura planificar_guardado(const char* nombre, const uint8_t* contenido, uint32_t tamanio,
+                                                         uint8_t* bloque, uint32_t* cadena, t_storage_operacion* operacion) {
+   t_storage_entrada_directorio entrada;
+   uint32_t libre;
+   uint32_t viejos = 0;
+
+   t_storage_resultado_lectura busqueda = buscar_entrada(nombre, bloque, &entrada, &libre);
+
+   if (busqueda == STORAGE_LECTURA_ERROR) {
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   if (busqueda == STORAGE_LECTURA_OK) {
+      if (!recorrer_cadena(&entrada, bloque, cadena, &viejos)) {
+         return STORAGE_ESCRITURA_ERROR;
+      }
+   } else if (libre == fs.layout.entradas_directorio) {
+      log_error(fs.logger, "## ERROR - Directorio lleno al intentar guardar: %s", nombre);
+      return STORAGE_ESCRITURA_DIRECTORIO_LLENO;
+   } else {
+      entrada.nro_entrada = libre;
+   }
+
+   uint32_t necesarios = tamanio / fs.layout.tam_bloque + (tamanio % fs.layout.tam_bloque != 0);
+
+   if (necesarios > viejos) {
+      uint32_t encontrados;
+
+      if (!buscar_bloques_libres(bloque, necesarios - viejos, cadena + viejos, &encontrados)) {
+         return STORAGE_ESCRITURA_ERROR;
+      }
+
+      if (encontrados < necesarios - viejos) {
+         log_error(fs.logger, "## ERROR - Falta de espacio en FAT al intentar guardar: %s", nombre);
+         return STORAGE_ESCRITURA_SIN_ESPACIO;
+      }
+   }
+
+   for (uint32_t i = 0; i < necesarios; i++) {
+      uint32_t desde     = i * fs.layout.tam_bloque;
+      uint32_t cantidad  = (tamanio - desde < fs.layout.tam_bloque) ? tamanio - desde : fs.layout.tam_bloque;
+      uint32_t siguiente = (i + 1 < necesarios) ? cadena[i + 1] : STORAGE_FAT_EOF;
+
+      if (!agregar_mod_bloque(operacion, cadena[i], contenido + desde, cantidad) ||
+          !agregar_mod_fat(operacion, cadena[i], siguiente)) {
+         return STORAGE_ESCRITURA_ERROR;
+      }
+   }
+
+   for (uint32_t i = necesarios; i < viejos; i++) {
+      if (!agregar_mod_fat(operacion, cadena[i], STORAGE_FAT_LIBRE)) {
+         return STORAGE_ESCRITURA_ERROR;
+      }
+   }
+
+   entrada.ocupada = true;
+   memset(entrada.nombre, 0, STORAGE_DIR_BYTES_NOMBRE);
+   memcpy(entrada.nombre, nombre, strnlen(nombre, STORAGE_DIR_BYTES_NOMBRE - 1));
+   entrada.tamanio       = tamanio;
+   entrada.primer_bloque = (necesarios > 0) ? cadena[0] : 0;
+
+   operacion->entrada = entrada;
+   return STORAGE_ESCRITURA_OK;
+}
+
+t_storage_resultado_escritura storage_checkpoint_guardar(const char* nombre, const uint8_t* contenido, uint32_t tamanio) {
+   if (strlen(nombre) > STORAGE_DIR_BYTES_NOMBRE - 1) {
+      log_error(fs.logger, "No se puede guardar \"%s\": el nombre tiene %zu caracteres y el maximo es %d.",
+                nombre, strlen(nombre), STORAGE_DIR_BYTES_NOMBRE - 1);
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   uint8_t* bloque                = malloc(fs.layout.tam_bloque);
+   uint32_t* cadena               = malloc(fs.layout.bloques_datos * sizeof(uint32_t));
+   t_storage_operacion* operacion = operacion_crear();
+
+   if (bloque == NULL || cadena == NULL || operacion == NULL) {
+      log_error(fs.logger, "No hay memoria para guardar el checkpoint \"%s\".", nombre);
+      free(bloque);
+      free(cadena);
+      operacion_destruir(operacion);
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   pthread_mutex_lock(&mutex_filesystem);
+
+   t_storage_resultado_escritura resultado = planificar_guardado(nombre, contenido, tamanio, bloque, cadena, operacion);
+
+   if (resultado == STORAGE_ESCRITURA_OK && !aplicar_operacion(operacion, bloque)) {
+      resultado = STORAGE_ESCRITURA_ERROR;
+   }
+
+   pthread_mutex_unlock(&mutex_filesystem);
+
+   free(bloque);
+   free(cadena);
+   operacion_destruir(operacion);
+   return resultado;
 }
