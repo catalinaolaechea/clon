@@ -76,6 +76,12 @@ bool validar_config(){
         ok = false;
     }
 
+    if(strcmp(ALGORITMO_REEMPLAZO, "LRU") != 0 && strcmp(ALGORITMO_REEMPLAZO, "CLOCK-M") != 0){
+        log_error(placa_logger, "ALGORITMO_REEMPLAZO=%s invalido: debe ser LRU o CLOCK-M", ALGORITMO_REEMPLAZO);
+        ok = false;
+    }
+
+
 
     return ok;
 
