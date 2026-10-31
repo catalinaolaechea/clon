@@ -13,11 +13,15 @@ LOGS=runtime/logs
 PIDS=runtime/local.pids   # lo usa bajar-local.sh
 JOB_INICIAL="${1:-prueba_minima}"   # solo el nombre: la Placa le antepone su PATH_INSTRUCCIONES
 ESPERA=1   # segundos entre etapas
-PLANIFICADOR_CONFIG="${PLANIFICADOR_CONFIG:-$CONFIGS/planificador.config}" 
+PLANIFICADOR_CONFIG="${PLANIFICADOR_CONFIG:-$CONFIGS/planificador.config}"
+TECLADO_PLANIFICADOR=runtime/planificador.in   # FIFO: lo que se escriba aca le llega al Labeler
 
+# Uso: [ENTRADA=<archivo>] lanzar <nombre> <comando...>   (sin ENTRADA el proceso lee de /dev/null)
 lanzar() {
     local nombre="$1"; shift
-    nohup "$@" > "$LOGS/$nombre.out" 2>&1 < /dev/null &
+    # <> abre para leer y escribir: con un FIFO no se bloquea esperando a alguien que escriba,
+    # y el proceso nunca ve fin de entrada aunque cada echo cierre su lado
+    nohup "$@" > "$LOGS/$nombre.out" 2>&1 <> "${ENTRADA:-/dev/null}" &
     echo "$! $nombre" >> "$PIDS"
     echo "    $nombre (pid $!)"
 }
@@ -31,7 +35,9 @@ lanzar storage ./storage/bin/storage "$CONFIGS/storage.config"
 sleep "$ESPERA"
 
 echo ">>> Planificador"
-lanzar planificador ./planificador/bin/planificador "$PLANIFICADOR_CONFIG" "$JOB_INICIAL"
+rm -f "$TECLADO_PLANIFICADOR"
+mkfifo "$TECLADO_PLANIFICADOR"
+ENTRADA="$TECLADO_PLANIFICADOR" lanzar planificador ./planificador/bin/planificador "$PLANIFICADOR_CONFIG" "$JOB_INICIAL"
 sleep "$ESPERA"
 
 echo ">>> Cores"
@@ -41,4 +47,5 @@ done
 
 echo
 echo ">>> OK. Salida de cada proceso en $LOGS/<nombre>.out"
+echo "    teclado del Labeler: echo 'texto' > $TECLADO_PLANIFICADOR"
 echo "    para bajarlos: ./scripts/bajar-local.sh"
