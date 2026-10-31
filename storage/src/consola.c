@@ -23,6 +23,7 @@
 
 #define MAX_CARACTERES_NOMBRE (STORAGE_DIR_BYTES_NOMBRE - 1) // adecuandose a la cte de bytes de la entrada de un directorio, al nombre le alcanza como maximo 23 de esos 32 bytes, uno menos para contar con el "\0"
 #define MAX_BYTES_WRITE 20  // del enunciado nos piden que "WRITE" escriba hasta 20 bytes 
+#define CAT_BYTES_POR_RENGLON 16
 
 //! estos prototipos son porque en C una funcion tiene que estar declarada antes para que alguien la llame en las funciones que declaramos aca. Son "static" porque son privadas de este archivo 
 static void ejecutar_comando(char* linea);
@@ -38,6 +39,7 @@ static void imprimir_resumen_ls(uint32_t ocupadas, uint32_t total);
 static void comando_info(void);
 static void comando_ls(void);
 static void comando_cat(char** palabras);
+static void imprimir_hexa(const char* nombre, const uint8_t* bytes, uint32_t leidos, uint32_t pedidos);
 static void comando_write(char** palabras);
 static void comando_rm(char** palabras);
 
@@ -197,22 +199,40 @@ static void mostrar_comandos(void) {
    printf("  %s\n", USO_RM);
 }
 
-//! aca vamos a ir teniendo los comandos definidos que hace cada uno. Esta cuando usamos "INFO" en terminal (por ahora lo lee de disco) agarra los valores que calculo issue-29 que salen del .config y se los pasa a "imprimir_superbloque()" para que se vea en ese formato 
+//! COMANDOS DE CONSOLA STORAGE: Esta cuando usamos "INFO" en terminal, lee del disco, guarda en una estructura para los superbloques en memoria y termina mostrandolos
 static void comando_info(void) {
-   t_storage_layout layout = storage_filesystem_layout();  // aca guardamos una COPIA del layout que calculo el SIS-29 al arrancar (struct con todas las cuentas del volumen)
+   t_storage_superbloque superbloque;  // instancia de superbloque en memoria 
 
-   imprimir_superbloque(STORAGE_FS_FIRMA, layout.tam_bloque, layout.cant_bloques, layout.bloques_directorio);  // imprimimos ese superbloque con "imprimir_superbloque()" que mas abajo la definimos denotando las partes del volumen (tamaño del bloque, cantidad de bloques y directorio de bloques), con la cte que es "FAT32_TRAIN"
-   printf("(valores del .config: la lectura real del bloque 0 llega en SIS-79)\n");
+   // caso que no se pueda leer dicho superbloque del disco directamente (es raro, o falla el malloc al pedir un buffer del cual guardar los datos leidos del disco para dsp guardar en estructura de suprebloque en memoria, si volumen no esta abierto en "acceder_bloque()", bloque fuera de rango, o errores propios del fseek/fread)
+   if (!storage_superbloque_leer(&superbloque)) {  
+      printf("No se pudo leer el superbloque del volumen (ver el log)\n");  // cualquier cosa notificamos y guardamos en log de errores segun que fue pasando en cada caso 
+      return;
+   }
+
+   imprimir_superbloque(superbloque.firma, superbloque.tam_bloque, superbloque.cant_bloques, superbloque.bloques_directorio);  // va mostrando ahora con los datos guardados en la estructura pensada para memoria de un superbloque de lo leido en disco 
 }
 
-//! para comando LS arma una tabla de 3 partes (encabezado, fila y resumen), todavia no lee el directorio muestra una fila inventada para que se vea el formato 
+//! para comando LS reconoce la palabra, valida que no traiga argumentos, pide datos a "filesystem.c" y los imprime con las funciones de formato del issue-28. No toca el disco ni el mutex 
 static void comando_ls(void) {
-   t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba 
+   t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba
 
-   imprimir_encabezado_ls();  // mostramos los titulos 
-   imprimir_entrada_ls(0, true, "modelo7", 40, 130);  // esta es la fila inventada para ver el formato 
-   imprimir_resumen_ls(0, layout.entradas_directorio);  // de 0 a 128 
-   printf("(la fila de arriba es de ejemplo: la lectura real del directorio llega en SIS-79)\n");
+   t_list* ocupadas = storage_directorio_listar();
+
+   if (ocupadas == NULL) {
+      printf("No se pudo leer el directorio del volumen (ver el log)\n");
+      return;
+   }
+
+   imprimir_encabezado_ls();  // mostramos los titulos
+
+   for (int i = 0; i < list_size(ocupadas); i++) {
+      t_storage_entrada_directorio* entrada = list_get(ocupadas, i);
+      imprimir_entrada_ls(entrada->nro_entrada, entrada->ocupada, entrada->nombre, entrada->tamanio, entrada->primer_bloque);
+   }
+
+   imprimir_resumen_ls(list_size(ocupadas), layout.entradas_directorio);  // de 0 a 128
+
+   list_destroy_and_destroy_elements(ocupadas, free);
 }
 
 //! recibe los 4 campos del superbloque y los imprime uno por uno por renglon, con nombre valor y unidad, con el issue-79 los lee del disco, pero el formato siempre es este 
@@ -252,7 +272,47 @@ static void comando_cat(char** palabras) {
       return;
    }
 
-   printf("CAT %s %u bytes: pendiente (SIS-79)\n", palabras[1], cantidad);
+   uint8_t* contenido = NULL;
+   uint32_t leidos = 0;
+
+   switch (storage_checkpoint_leer(palabras[1], cantidad, &contenido, &leidos)) {
+   case STORAGE_LECTURA_NO_EXISTE:
+      printf("No existe el checkpoint \"%s\"\n", palabras[1]);
+      return;
+   case STORAGE_LECTURA_ERROR:
+      printf("No se pudo leer el checkpoint \"%s\" (ver el log)\n", palabras[1]);
+      return;
+   case STORAGE_LECTURA_OK:
+      break;
+   }
+
+   imprimir_hexa(palabras[1], contenido, leidos, cantidad);
+   free(contenido);
+}
+
+static void imprimir_hexa(const char* nombre, const uint8_t* bytes, uint32_t leidos, uint32_t pedidos) {
+   if (leidos < pedidos) {
+      printf("%s: se pidieron %u bytes y el checkpoint tiene %u\n", nombre, pedidos, leidos);
+   } else {
+      printf("%s: primeros %u bytes\n", nombre, leidos);
+   }
+
+   if (leidos == 0) {
+      printf("(el checkpoint esta vacio)\n");
+      return;
+   }
+
+   for (uint32_t i = 0; i < leidos; i++) {
+      if (i % CAT_BYTES_POR_RENGLON == 0) {
+         printf("%08X ", i);
+      }
+
+      printf(" %02X", bytes[i]);
+
+      if (i % CAT_BYTES_POR_RENGLON == CAT_BYTES_POR_RENGLON - 1 || i == leidos - 1) {
+         printf("\n");
+      }
+   }
 }
 
 static void comando_write(char** palabras) {

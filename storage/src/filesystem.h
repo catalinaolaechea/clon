@@ -1,23 +1,20 @@
-// header del filesystem "FAT32_TRAIN". Aca vive el "contrato" de todo lo que tiene que ver con el
-// volumen: las constantes que fija el enunciado (firma, valores de la FAT, tamaños de las estructuras),
-// el struct con el layout ya calculado, y las firmas de las funciones que definimos en el .c
+//! header del filesystem "FAT32_TRAIN". Aca vive el "contrato" de todo lo que tiene que ver con el volumen: las constantes que fija el enunciado (firma, valores de la FAT, tamaños de las estructuras), el struct con el layout ya calculado, el struct donde guardamos para el "superbloque en memoria" y las firmas de las funciones que definimos en el .c
 
-#ifndef STORAGE_FILESYSTEM_H_  // "include guards" igual que en config.h
+#ifndef STORAGE_FILESYSTEM_H_  // include guards
 #define STORAGE_FILESYSTEM_H_
 
-#include <stdbool.h>      // el tipo bool, que en C no viene por default
+#include <stdbool.h>      
 #include <stdint.h>       // los tipos de ancho fijo uint8_t y uint32_t
 #include <commons/log.h>  // el tipo "t_log" para poder loguear
+#include <commons/collections/list.h>  // 
 #include "config.h"       // el tipo "t_storage_config", porque de ahi salen TAM_BLOQUE, CANT_BLOQUES y demas
 
 
-//! ─────────────────────────── SUPERBLOQUE ───────────────────────────
-// El enunciado pide una estructura CONTIGUA y EXACTA en el bloque 0: 11 bytes de firma + 3 enteros de
-// 4 bytes = 23 bytes, y el resto del bloque relleno con ceros (reservado para uso futuro)
+// SUPERBLOQUE: ("volumen.dat") es archivo de bytes (1024 bloques de 64) sin ningun orden a la vista, el que lo abre no sabe donde termina un bloque, donde arranca la FAT ni donde esta el directorio, el "superbloque" es la ficha tecnica del volumen, escrita en el bloque 0 que es el primero que se lee con todo lo necesario para calcular lo demas
 
-#define STORAGE_FS_FIRMA        "FAT32_TRAIN"  // "magic number": sirve para reconocer que el archivo ES un volumen nuestro y no cualquier otra cosa
-#define STORAGE_FS_FIRMA_BYTES  11             // ojo: son 11 bytes EXACTOS y SIN el '\0' del final, por eso no usamos sizeof() que daria 12
-
+//! Superbloque "en disco": Es el "original" del cual leemos del disco, el enunciado pide una estructura CONTIGUA y EXACTA en el bloque 0: 11 bytes de firma + 3 enteros de 4 bytes = 23 bytes, y el resto del bloque relleno con ceros (reservado para uso futuro)
+#define STORAGE_FS_FIRMA "FAT32_TRAIN"         // "magic number": sirve para reconocer que el archivo ES un volumen nuestro y no cualquier otra cosa
+#define STORAGE_FS_FIRMA_BYTES 11              // ojo: son 11 bytes EXACTOS y SIN el '\0' del final, por eso no usamos sizeof() que daria 12
 // offsets (la posicion en bytes contando desde el arranque del bloque) de cada campo dentro del superbloque
 #define STORAGE_SB_OFF_FIRMA               0   // bytes 0..10
 #define STORAGE_SB_OFF_TAM_BLOQUE          11  // bytes 11..14
@@ -25,18 +22,19 @@
 #define STORAGE_SB_OFF_BLOQUES_DIRECTORIO  19  // bytes 19..22
 #define STORAGE_SB_BYTES_UTILES            23  // 11 + 4 + 4 + 4, lo que de verdad se usa; de aca hasta TAM_BLOQUE va padding en ceros
 
-//! por que escribimos el superbloque a mano con "memcpy" a estos offsets y NO declaramos un struct de C
-//! que se escriba de una? Porque el compilador mete "padding" (bytes de relleno invisibles) entre la firma
-//! de 11 bytes y el primer uint32_t, para que el entero arranque en una direccion multiplo de 4. O sea que
-//! un struct comun pesaria 24 bytes y no 23, y el entero caeria en el byte 12 en vez del 11: el layout en
-//! disco dejaria de ser el que pide el enunciado. Se podria forzar con __attribute__((packed)), pero los
-//! offsets a mano son explicitos y no dependen de ninguna extension del compilador
+//! por que escribimos el superbloque a mano con "memcpy" a estos offsets y NO declaramos un struct de C que se escriba de una? Porque el compilador mete "padding" (bytes de relleno invisibles) entre la firma de 11 bytes y el primer uint32_t, para que el entero arranque en una direccion multiplo de 4. O sea que un struct comun pesaria 24 bytes y no 23, y el entero caeria en el byte 12 en vez del 11: el layout en disco dejaria de ser el que pide el enunciado. Se podria forzar con __attribute__((packed)), pero los offsets a mano son explicitos y no dependen de ninguna extension del compilador
+
+//! Superbloque "en memoria": CPU no puede laburar directamente con disco entonces aca tenemos la deserializacion de lo que leimos del disco para guardarlo en memoria, tiene lo siguiente: 
+typedef struct {
+   char     firma[STORAGE_FS_FIRMA_BYTES + 1];  // FAT32_TRAIN" (Confirma que el archivo es un volumen nuestro y no otra cosa),
+   uint32_t tam_bloque;                         // Tamaño de bloque (para saber donde cae cada bloque)
+   uint32_t cant_bloques;                       // Cantidad de bloques (Para saber cuanto mide la FAT)  
+   uint32_t bloques_directorio;                 // Bloques del directorio (Saber donde termina el directorio y arrancan los datos)
+} t_storage_superbloque;
 
 
-//! ─────────────────────────── FILE ALLOCATION TABLE ───────────────────────────
-// Una entrada uint32_t por CADA bloque del filesystem. Cada entrada dice cual es el bloque siguiente del
-// checkpoint al que pertenece: es una lista enlazada, pero guardada en una tabla aparte en vez de dentro
-// de los datos
+//! ─────────────────────────── FILE ALLOCATION TABLE ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
+// Una entrada uint32_t por CADA bloque del filesystem. Cada entrada dice cual es el bloque siguiente del checkpoint al que pertenece: es una lista enlazada, pero guardada en una tabla aparte en vez de dentro de los datos
 
 #define STORAGE_FAT_BYTES_ENTRADA  4  // sizeof(uint32_t), lo dejamos con nombre para que se lea el "por que" en las cuentas
 
@@ -44,15 +42,16 @@
 #define STORAGE_FAT_EOF         0x0FFFFFFFu  // "end of file": ultimo bloque del checkpoint, la cadena termina aca
 #define STORAGE_FAT_RESERVADO   0x0FFFFFFEu  // bloque de la estructura (superbloque, FAT o directorio): NUNCA se puede considerar libre
 
-//! de los 32 bits de cada entrada, solo los 28 MENOS significativos son el numero de bloque: los 4 mas
-//! altos quedan reservados. Esta mascara saca el numero de bloque de una entrada, y la definimos desde
-//! ahora aunque todavia no haya cadenas que recorrer, porque es la regla del formato
+//! de los 32 bits de cada entrada, solo los 28 MENOS significativos son el numero de bloque: los 4 mas altos quedan reservados. Esta mascara saca el numero de bloque de una entrada, y la definimos desde ahora aunque todavia no haya cadenas que recorrer, porque es la regla del formato
 #define STORAGE_FAT_MASCARA     0x0FFFFFFFu
 
 
-//! ─────────────────────────── ENTRADA DE DIRECTORIO ───────────────────────────
-// Un unico directorio raiz, con una entrada por checkpoint, pegadas una atras de la otra desde el primer
-// byte de la region. Cada entrada pesa 32 bytes EXACTOS
+// CHECKPOINT (Archivo): Es un archivo en nuestro filesystem para Storage un checkpoint puede ser un nombre (ej. modelo7) o un contenido (bytes que se guardan en bloques de datos, si no entran en un bloque unico ocupan varios encadenados por la FAT)
+// ENTRADA DE DIRECTORIO: Ficha de 32 bytes una por cada checkpoint que nos dice el contenido que esta repartido en bloques, si ej. "modelo7" existe, cuanto pesa y donde empieza, una entrada "libre" es una ficha vacia disponible para un checkpoint nuevo (al formatear hay 128 libres)
+// ambos como juegan en el enunciado: "Contiene una entrada por cada Checkpoint", los Jobs entrenan modelos, cada uno guarda su proceso con syscall "SAVE_CHECKPOINT modelo7", ese guardado viaja Core -> Planificador -> Storage (este ultimo persiste en el volumen), otro Job lo puede cargar con "LOAD"
+
+//! Entrada de directorio "en disco" (REPASAR DESPUES Y TERMINAR)
+// Un unico directorio raiz, con una entrada por checkpoint, pegadas una atras de la otra desde el primer byte de la region. Cada entrada pesa 32 bytes EXACTOS
 
 #define STORAGE_DIR_OFF_ESTADO        0   // byte 0:      uint8_t, 0 = libre / 1 = ocupada
 #define STORAGE_DIR_OFF_NOMBRE        1   // bytes 1..23: cadena terminada en '\0'
@@ -65,11 +64,24 @@
 #define STORAGE_DIR_ESTADO_LIBRE    0
 #define STORAGE_DIR_ESTADO_OCUPADA  1
 
+//! Entrada de directorio "en memoria", misma idea que planteamos en superbloque, aca vamos a terminar almacenando lo que leimos del disco 
+typedef struct {
+   uint32_t nro_entrada;  // en que lugar del directorio esta (0..127), en el disco NO esta escrito, sale de la posicion que calculamos con "storage_directorio_listar()"
+   bool     ocupada;  // si esta en 0 esta libre, 1 ocupada 
+   char     nombre[STORAGE_DIR_BYTES_NOMBRE];  // le damos lugar hasta 22 caracteres + '\0'
+   uint32_t tamanio;  // bytes 24..27 (que nos da el enunciado que debe ser asi): cuanto pesa el checkpoint 
+   uint32_t primer_bloque;  // bytes 28..31: donde arranca la cadena en la FAT 
+} t_storage_entrada_directorio;
 
-//! ─────────────────────────── LAYOUT DEL VOLUMEN ───────────────────────────
-// Todas las cuentas del reparto de bloques, resueltas UNA sola vez al arrancar y guardadas acá. La idea es
-// no andar recalculando "donde empieza el directorio" cada vez que se lo necesita, y sobre todo no
-// hardcodear ningun numero: todo sale del .config
+typedef enum {
+   STORAGE_LECTURA_OK,
+   STORAGE_LECTURA_NO_EXISTE,
+   STORAGE_LECTURA_ERROR
+} t_storage_resultado_lectura;
+
+
+//! ─────────────────────────── LAYOUT DEL VOLUMEN ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
+// Todas las cuentas del reparto de bloques, resueltas UNA sola vez al arrancar y guardadas acá. La idea es no andar recalculando "donde empieza el directorio" cada vez que se lo necesita, y sobre todo no hardcodear ningun numero: todo sale del .config
 
 typedef struct {
    // lo que vino del .config, lo guardamos adentro para que el layout se explique solo
@@ -93,41 +105,37 @@ typedef struct {
 } t_storage_layout;
 
 
-//! ─────────────────────────── FUNCIONES PURAS (las cuentas) ───────────────────────────
-//! "pura" quiere decir que con los mismos 3 numeros de entrada devuelve siempre lo mismo, sin leer ni
-//! escribir nada de afuera: ni archivos, ni variables globales, ni el .config. Eso la hace trivial de
-//! testear a mano (le paso 1024/64/64 y tiene que darme 64 de FAT y 895 de datos) y es el motivo por el que
-//! recibe los valores por parametro en vez de ir a buscarlos al config
+//! ─────────────────────────── FUNCIONES PURAS (las cuentas) ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
+//! "pura" quiere decir que con los mismos 3 numeros de entrada devuelve siempre lo mismo, sin leer ni escribir nada de afuera: ni archivos, ni variables globales, ni el .config. Eso la hace trivial de testear a mano (le paso 1024/64/64 y tiene que darme 64 de FAT y 895 de datos) y es el motivo por el que recibe los valores por parametro en vez de ir a buscarlos al config
 
 t_storage_layout storage_layout_calcular(uint32_t cant_bloques, uint32_t tam_bloque, uint32_t bloques_directorio);
 
-// nos dice si ese reparto cierra, o si el superbloque + la FAT + el directorio se comieron todo el volumen
-// y no quedo ni un bloque de datos. Si da false, loguea el motivo concreto
+// nos dice si ese reparto cierra, o si el superbloque + la FAT + el directorio se comieron todo el volumen y no quedo ni un bloque de datos. Si da false, loguea el motivo concreto
 bool storage_layout_es_valido(t_storage_layout layout, t_log* logger);
 
 // deja el reparto escrito en el log: son los numeros que sirven de "sanity check" de todo el modulo
 void storage_layout_loguear(t_storage_layout layout, t_log* logger);
 
 
-//! ─────────────────────────── FUNCIONES CON ESTADO (el disco) ───────────────────────────
+//! ─────────────────────────── FUNCIONES CON ESTADO (el disco) ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 
-// Punto de entrada del modulo. Si el archivo del volumen no existe lo crea y lo formatea (superbloque +
-// FAT con los datos libres + directorio con todas las entradas libres). Si YA existe NO lo toca: valida la
-// firma y que el .config coincida con lo que dice el superbloque. Devuelve false si algo no cierra
+// Punto de entrada del modulo. Si el archivo del volumen no existe lo crea y lo formatea (superbloque + FAT con los datos libres + directorio con todas las entradas libres). Si YA existe NO lo toca: valida la firma y que el .config coincida con lo que dice el superbloque. Devuelve false si algo no cierra
 bool storage_filesystem_iniciar(t_storage_config* config, t_log* logger);
 
 // cierra el archivo del volumen y deja el modulo como al principio
 void storage_filesystem_finalizar(void);
 
-// devuelve una COPIA del layout que quedo vigente, para que el resto del modulo pueda consultarlo sin
-// tocar el estado interno
+// devuelve una COPIA del layout que quedo vigente, para que el resto del modulo pueda consultarlo sin tocar el estado interno
 t_storage_layout storage_filesystem_layout(void);
 
-//! el UNICO acceso a bloque del modulo pasa por estas dos funciones, y las dos aplican RETARDO_ACCESO_BLOQUE.
-//! El enunciado pide ese retardo ante cada acceso a cualquier bloque del volumen, sea de datos, del
-//! directorio o de la FAT: si dejaramos fseek/fread desparramados por todo el modulo, el dia que haya que
-//! tocar el retardo (o agregar un log de acceso) habria que acordarse de todos los lugares
+//! el UNICO acceso a bloque del modulo pasa por estas dos funciones, y las dos aplican RETARDO_ACCESO_BLOQUE. El enunciado pide ese retardo ante cada acceso a cualquier bloque del volumen, sea de datos, del directorio o de la FAT: si dejaramos fseek/fread desparramados por todo el modulo, el dia que haya que tocar el retardo (o agregar un log de acceso) habria que acordarse de todos los lugares
 bool storage_bloque_leer(uint32_t nro_bloque, void* destino);
 bool storage_bloque_escribir(uint32_t nro_bloque, const void* origen);
+
+bool storage_superbloque_leer(t_storage_superbloque* superbloque);
+
+t_list* storage_directorio_listar(void);
+
+t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t max_bytes, uint8_t** contenido, uint32_t* leidos);
 
 #endif // para cerrar el #ifndef

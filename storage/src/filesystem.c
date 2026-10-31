@@ -1,13 +1,14 @@
-#include "filesystem.h"  // el header de arriba: constantes del formato, el struct del layout y las firmas que definimos aca
+#include "filesystem.h"  // el header de arriba: constantes del formato, el struct del layout y las firmas que definimos aca (REPASAR DESPUES Y TERMINAR)
 
-#include <stdio.h>    // entrada salida sobre archivos (fopen, fseek, fread, fwrite, fclose)
-#include <stdlib.h>   // memoria (malloc, calloc, free)
-#include <string.h>   // manejo de memoria y cadenas (memcpy, memcmp, memset, strerror)
-#include <errno.h>    // la variable "errno" para saber POR QUE fallo una syscall
-#include <unistd.h>   // estandares de UNIX, de aca sacamos "access()" y "usleep()"
+#include <stdio.h>           // entrada salida sobre archivos (fopen, fseek, fread, fwrite, fclose)
+#include <stdlib.h>          // memoria (malloc, calloc, free)
+#include <string.h>          // manejo de memoria y cadenas (memcpy, memcmp, memset, strerror)
+#include <errno.h>           // la variable "errno" para saber POR QUE fallo una syscall
+#include <unistd.h>          // estandares de UNIX, de aca sacamos "access()" y "usleep()"
+#include "sincronizacion.h"  // es para reconocer el "mutex_filesystem", como vamos a tener que usar un mutex relacionado a leer bloques para distintos hilos 
 
 
-//! ─────────────────────────── ESTADO DEL MODULO ───────────────────────────
+//! ─────────────────────────── ESTADO DEL MODULO ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 //! Un unico struct "static" con todo lo que el filesystem necesita recordar entre llamadas. "static" a nivel
 //! de archivo quiere decir que este nombre NO se ve desde los otros .c: la unica forma de tocar el volumen
 //! desde afuera es por las funciones del header. Es el mismo criterio de los mutex en sincronizacion.c, pero
@@ -20,7 +21,7 @@ static struct {
 } fs = { NULL, {0}, 0, NULL };
 
 
-//! ─────────────────────────── HELPERS DE SERIALIZACION ───────────────────────────
+//! ─────────────────────────── HELPERS DE SERIALIZACION ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 
 //! mete un uint32_t en un buffer de bytes, en la posicion "offset". Usamos memcpy y no un cast del tipo
 //! "*(uint32_t*)(buffer + offset) = valor" porque ese cast asume que la direccion esta alineada a 4 bytes, y
@@ -37,8 +38,10 @@ static uint32_t leer_uint32(const uint8_t* buffer, uint32_t offset) {
    return valor;
 }
 
+static void deserializar_entrada(const uint8_t* cruda, uint32_t nro_entrada, t_storage_entrada_directorio* entrada);
 
-//! ─────────────────────────── FUNCIONES PURAS: LAS CUENTAS ───────────────────────────
+
+//! ─────────────────────────── FUNCIONES PURAS: LAS CUENTAS ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 
 t_storage_layout storage_layout_calcular(uint32_t cant_bloques, uint32_t tam_bloque, uint32_t bloques_directorio) {
    t_storage_layout layout = {0};  // arrancamos todo en cero asi ningun campo queda con basura si salimos antes
@@ -407,4 +410,242 @@ void storage_filesystem_finalizar(void) {
 
 t_storage_layout storage_filesystem_layout(void) {
    return fs.layout;  // por copia: el que llama puede mirarlo todo lo que quiera sin poder modificar el nuestro
+}
+
+//todo issue-79
+//! esta funcion lo que hace es agarrar los datos que leimos del superbloque en disco para traducirlo hacia el superbloque en memoria y el CPU pueda laburar con el. Lo termina ejecutando el comando "INFO" en la consola de storage 
+bool storage_superbloque_leer(t_storage_superbloque* superbloque) {
+   uint8_t* bloque = malloc(fs.layout.tam_bloque);  // pedimos un buffer del tamaño de un bloque entero, guiandonos del tamaño final que tendra pidiendoselo a la estructura del layout (calculo final). Ademas la funcion "storage_bloque_leer()" siempre lee de a bloques enteros usando dentro la funcion "acceder_bloque" que es del issue-29   
+
+   if (bloque == NULL) {  // caso puramente del malloc segun lo que devolvio, si es NULL (proceso tiene tope de memoria, o si no queda RAM), ya q preguntando a layout tamaño siempre habra un valor
+      log_error(fs.logger, "No hay memoria para leer el superbloque (%u bytes).", fs.layout.tam_bloque);  
+      return false;
+   }
+
+   //! en Storage tenemos varios hilos tocando "volumen.dat" (cond. carrera), el de la consola ejecutando el comando "INFO" y uno por cada conexion del Planificador, ademas que leer un bloque son 2 pasos primero fseek y fread, podria quedar el cursor mostrando basura. Solucionamos con un candado con una sola llave ("mutex_filesystem" todo lo relacionado a superbloque, FAT, directorio, datos)
+   pthread_mutex_lock(&mutex_filesystem);  // pedimos la llave, si esta libre la agarramos y vamos a seccion critica, si otro la tiene nos quedamos esperando sin gastar CPU hasta que se libere 
+   bool ok = storage_bloque_leer(0, bloque);  // entramos a seccion critica, ejecutamos "storage_bloque_leer()" y ningun otro hilo puede entrar hasta que liberemos. LEEMOS DE DISCO 
+   pthread_mutex_unlock(&mutex_filesystem);  // devuelvo la llave, si habia alguien esperando entra el 
+
+   // finalmente de lo que leimos en disco habiendolo sincronizado con un mutex por tener varios hilos en el mismo archivo, y lo tenemos guardado en buffer "bloque" lo terminamos traduciendo a la estructura de "superbloque" que tenemos en memoria y definimos en el header de filesystem 
+   if (ok) {
+      // al atributo "firma" le decimos "copia 11 bytes (fs_firma) empezando en bloque + 0 (sb_off)". Usamos "memcpy()" justamente porque tenemos que copiar un bloque de memoria
+      memcpy(superbloque->firma, bloque + STORAGE_SB_OFF_FIRMA, STORAGE_FS_FIRMA_BYTES);  
+      superbloque->firma[STORAGE_FS_FIRMA_BYTES] = '\0';  // una vez copiado los 11 bytes, volvemos a apuntar a la firma y le agregamos al lugar 12 un '\0' para que C lo trate como texto 
+      // demas atributos vamos leyendo del bloque y asignando usando "leer_uint32()" (que va leyendo de a bloques, x eso especificos de bloque, cant. bloques y bloques de directorio)
+      superbloque->tam_bloque = leer_uint32(bloque, STORAGE_SB_OFF_TAM_BLOQUE);  
+      superbloque->cant_bloques = leer_uint32(bloque, STORAGE_SB_OFF_CANT_BLOQUES);
+      superbloque->bloques_directorio = leer_uint32(bloque, STORAGE_SB_OFF_BLOQUES_DIRECTORIO);
+   }
+
+   free(bloque);  // finalmente como el buffer que pedimos lo tenemos que liberar una vez que ya lo asignamos a la estructura que tenemos para guardarlo en memoria lo que leimos del disco, liberamos
+   return ok;
+}
+
+//! Comando LS tiene que mostrar todos los checkpoints guardados (info que vive en el directorio) entonces recorre los 128 bloques y se queda unicamente con las ocupadas, las deserializa (traduce de bytes crudos a valores que guardamos en un struct para tener en memoria) y las devuelva juntas en una lista. Termina haciendo lo mismo que la de arriba pero para entradas de directorio 
+t_list* storage_directorio_listar(void) {
+   uint8_t* bloque = malloc(fs.layout.tam_bloque);  // buffer de bloque que usaremos para ir leyendo de a bloques del disco, listando de a bloques y asi 
+   
+   // caso que directamente malloc falle, por lo denotado arriba 
+   if (bloque == NULL) {
+      log_error(fs.logger, "No hay memoria para leer el directorio (%u bytes).", fs.layout.tam_bloque);
+      return NULL;
+   }
+
+   t_list* ocupadas = list_create();  // creamos una instancia de lista de las commons donde vamos a almacenar las entradas ocupadas que leemos del disco, crece con cada "list_add()"
+   uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;  // cuantas entradas de 32 bytes (BYTES_ENTRADA) entran en un bloque => 64/32 = 2. Lo planteamos asi para no tener nada hardcodeado, si el tamaño cambiara a 128 mas tarde seria otro el resultado entonces pero mismo calculo 
+   bool ok = true;  // lo vamos a necesitar despues para cambiarle el valor a "false" incluso (linea 472), usando los datos booleanos crudo no nos va a servir (bandera de error se llama)
+
+   //! tenemos los mismos varios hilos tocando "volumen.dat" en Storage, solo q aca el comando es LS. Solucionamos igualmente con un mutex asi evitamos errores de sincronizacion y cond. carrera 
+   pthread_mutex_lock(&mutex_filesystem);
+
+   // entramos a la seccion critica, recorro todos los bloques del directorio (0 a 63), la condicion "ok && ..." es una forma de cortar sin return, si algo falla en una iteracion directamente corta aca y no vuelve a iterar 
+   for (uint32_t i = 0; ok && i < fs.layout.bloques_directorio; i++) {
+      // en cada iteracion mandamos a leer dicho bloque de directorio pero salteando directamente el superbloque (0) y la FAT (1..64), pasando unicamente al bloque de directorio a leer (asi es la estructura de la particion). repasar "storage_bloque_leer()" (aplica "RETARDO", valida rango, hace fseek+fread y devuelve true, si falla loguea y devuelve false) 
+      ok = storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque);  
+
+      // del bloque de directorio recorro todas sus entradas 
+      for (uint32_t j = 0; ok && j < entradas_por_bloque; j++) {
+
+         // por cada bloque de entrada usando "aritmetica de punteros" hacemos que nuestro buffer "bloque" que primero apunta al primer byte vaya apuntando a los demas bloques sumandole n cantidad de bytes (tamaño de un bloque de entrada)
+         const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA; 
+
+         // el byte 0 de cada entrada es el estado (0 libre, 1 ocupada), de "cruda" que esta apuntando a cada entrada miramos si su estado NO es ocupada seguimos nomas ya que no representa un checkpoint osea un archivo en el bloque de directorio, cuando encontremos una que sea ocupada entonces ahi es que vamos a intentar listarla
+         if (cruda[STORAGE_DIR_OFF_ESTADO] != STORAGE_DIR_ESTADO_OCUPADA) {
+            continue;
+         }
+
+         // con la entrada ocupada entonces creamos una instancia de entrada de directorio y pedimos memoria del tamaño de la misma
+         t_storage_entrada_directorio* entrada = malloc(sizeof(t_storage_entrada_directorio));
+         
+         // raro pero lo mismo, por las dudas que el malloc no responda bien 
+         if (entrada == NULL) {  
+            log_error(fs.logger, "No hay memoria para la entrada %u del directorio.", i * entradas_por_bloque + j);
+            ok = false;
+            break;
+         }
+
+         // y es aca donde terminamos de pasar la entrada de directorio "en disco" para poder almacenarla en la estructura preparada "en memoria", nomas que la dejamos en otra funcion porque posiblemente la tengamos que reutilizar en el proximo check 
+         deserializar_entrada(cruda, i * entradas_por_bloque + j, entrada);
+         list_add(ocupadas, entrada);  // y dicha instancia la guardamos en la lista de entradas de la commons (unicamente las ocupadas)
+      }
+   }
+
+   pthread_mutex_unlock(&mutex_filesystem);  //! cerramos el candado, salimos de la seccion critica, soltamos la llave para que el que este esperando si algun hilo lo hay pueda entrar 
+   free(bloque);  // liberamos el buffer que usamos para recorrer el directorio y las entradas del directorio 
+
+   // al final de todo nuestra flag deberia estar todo ok, en caso de no estar todo bien signfica que lo recopilado esta corrupto, mostrar un comando LS estaria mostrando mal, entonces directamente matamos todos los elementos de la lista de "ocupadas" y no devolvemos nada 
+   if (!ok) {
+      list_destroy_and_destroy_elements(ocupadas, free);
+      return NULL;
+   }
+
+   return ocupadas;  // si todo funco bien devolvemos la lista, le damos ownership al que llama la funcion, no le liberamos la lista de entradas ocupadas, que la libere el usuario cuando lo considere 
+}
+
+//! lo llevamos a una funcion aparte para que no se alargue tanto la funcion de arriba, y creo que se usa en siguiente Check 4 
+static void deserializar_entrada(const uint8_t* cruda, uint32_t nro_entrada, t_storage_entrada_directorio* entrada) {
+   entrada->nro_entrada = nro_entrada;
+   entrada->ocupada     = (cruda[STORAGE_DIR_OFF_ESTADO] == STORAGE_DIR_ESTADO_OCUPADA);
+
+   memcpy(entrada->nombre, cruda + STORAGE_DIR_OFF_NOMBRE, STORAGE_DIR_BYTES_NOMBRE);
+   entrada->nombre[STORAGE_DIR_BYTES_NOMBRE - 1] = '\0';
+
+   entrada->tamanio       = leer_uint32(cruda, STORAGE_DIR_OFF_TAMANIO);
+   entrada->primer_bloque = leer_uint32(cruda, STORAGE_DIR_OFF_PRIMER_BLOQUE);
+}
+
+
+static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* bloque, t_storage_entrada_directorio* encontrada) {
+   uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;
+
+   for (uint32_t i = 0; i < fs.layout.bloques_directorio; i++) {
+      if (!storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque)) {
+         return STORAGE_LECTURA_ERROR;
+      }
+
+      for (uint32_t j = 0; j < entradas_por_bloque; j++) {
+         const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA;
+
+         if (cruda[STORAGE_DIR_OFF_ESTADO] != STORAGE_DIR_ESTADO_OCUPADA) {
+            continue;
+         }
+
+         deserializar_entrada(cruda, i * entradas_por_bloque + j, encontrada);
+
+         if (strcmp(encontrada->nombre, nombre) == 0) {
+            return STORAGE_LECTURA_OK;
+         }
+      }
+   }
+
+   return STORAGE_LECTURA_NO_EXISTE;
+}
+
+static bool leer_entrada_fat(uint32_t nro_entrada, uint8_t* bloque, uint32_t* valor) {
+   uint64_t byte_en_fat = (uint64_t) nro_entrada * STORAGE_FAT_BYTES_ENTRADA;
+   uint32_t bloque_fat  = fs.layout.primer_bloque_fat + (uint32_t) (byte_en_fat / fs.layout.tam_bloque);
+   uint32_t offset      = (uint32_t) (byte_en_fat % fs.layout.tam_bloque);
+
+   if (!storage_bloque_leer(bloque_fat, bloque)) {
+      return false;
+   }
+
+   *valor = leer_uint32(bloque, offset);
+   log_info(fs.logger, "## Acceso FAT - Entrada: %u - Valor: 0x%08X", nro_entrada, *valor);
+   return true;
+}
+
+static bool es_bloque_de_datos(uint32_t nro_bloque) {
+   return nro_bloque >= fs.layout.primer_bloque_datos && nro_bloque < fs.layout.cant_bloques;
+}
+
+static bool seguir_cadena(const t_storage_entrada_directorio* entrada, uint8_t* bloque, uint8_t* destino, uint32_t a_leer) {
+   uint32_t actual   = entrada->primer_bloque;
+   uint32_t copiados = 0;
+   uint32_t vueltas  = 0;
+
+   while (copiados < a_leer) {
+      if (!es_bloque_de_datos(actual)) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": el bloque %u no es un bloque de datos (%u..%u).",
+                   entrada->nombre, actual, fs.layout.primer_bloque_datos, fs.layout.cant_bloques - 1);
+         return false;
+      }
+
+      vueltas++;
+      if (vueltas > fs.layout.cant_bloques) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": se recorrieron mas de %u bloques sin llegar al final (hay un ciclo en la FAT).",
+                   entrada->nombre, fs.layout.cant_bloques);
+         return false;
+      }
+
+      if (!storage_bloque_leer(actual, bloque)) {
+         return false;
+      }
+      log_info(fs.logger, "## Acceso Bloque - Checkpoint: %s - Bloque: %u", entrada->nombre, actual);
+
+      uint32_t faltan         = a_leer - copiados;
+      uint32_t de_este_bloque = (faltan < fs.layout.tam_bloque) ? faltan : fs.layout.tam_bloque;
+      memcpy(destino + copiados, bloque, de_este_bloque);
+      copiados += de_este_bloque;
+
+      if (copiados == a_leer) {
+         break;
+      }
+
+      uint32_t valor;
+      if (!leer_entrada_fat(actual, bloque, &valor)) {
+         return false;
+      }
+
+      if ((valor & STORAGE_FAT_MASCARA) == STORAGE_FAT_EOF) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": la cadena termina en el bloque %u y todavia faltan %u bytes de los %u que dice el directorio.",
+                   entrada->nombre, actual, a_leer - copiados, entrada->tamanio);
+         return false;
+      }
+
+      actual = valor & STORAGE_FAT_MASCARA;
+   }
+
+   return true;
+}
+
+t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t max_bytes, uint8_t** contenido, uint32_t* leidos) {
+   uint8_t* bloque = malloc(fs.layout.tam_bloque);
+   if (bloque == NULL) {
+      log_error(fs.logger, "No hay memoria para leer el checkpoint \"%s\" (%u bytes).", nombre, fs.layout.tam_bloque);
+      return STORAGE_LECTURA_ERROR;
+   }
+
+   uint8_t* datos  = NULL;
+   uint32_t a_leer = 0;
+   t_storage_entrada_directorio entrada;
+
+   pthread_mutex_lock(&mutex_filesystem);
+
+   t_storage_resultado_lectura resultado = buscar_entrada(nombre, bloque, &entrada);
+
+   if (resultado == STORAGE_LECTURA_OK) {
+      a_leer = (max_bytes < entrada.tamanio) ? max_bytes : entrada.tamanio;
+      datos  = malloc(a_leer > 0 ? a_leer : 1);
+
+      if (datos == NULL) {
+         log_error(fs.logger, "No hay memoria para los %u bytes del checkpoint \"%s\".", a_leer, nombre);
+         resultado = STORAGE_LECTURA_ERROR;
+      } else if (!seguir_cadena(&entrada, bloque, datos, a_leer)) {
+         resultado = STORAGE_LECTURA_ERROR;
+      }
+   }
+
+   pthread_mutex_unlock(&mutex_filesystem);
+   free(bloque);
+
+   if (resultado != STORAGE_LECTURA_OK) {
+      free(datos);
+      return resultado;
+   }
+
+   *contenido = datos;
+   *leidos    = a_leer;
+   return STORAGE_LECTURA_OK;
 }
