@@ -64,3 +64,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Pruebas propias: salidas de los módulos (Offload, reportes, storage, copias del deploy)
+pruebas/checkpoints/*/runtime/
