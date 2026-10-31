@@ -415,7 +415,7 @@ bool asignar_espacio(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica){
 
 
 //Liberar cantidad de paginas desde inicio 
-static void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad){
+void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad){
 
     for(uint32_t i = 0; i<cantidad; i++ ){
         t_entrada_pagina* entrada = list_get(job->tabla_paginas, inicio + i);

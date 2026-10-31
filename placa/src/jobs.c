@@ -1,4 +1,5 @@
 #include "jobs.h"
+#include "memoria.h"
 
 t_list* lista_jobs;
 
@@ -110,22 +111,35 @@ static t_job_placa* quitar_job(uint32_t jid_buscado){
 // sus marcos y del lugar reservado en el Offload.
 void finalizar_job(uint32_t jid){
 
-    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_jobs);       
+    pthread_mutex_lock(&mutex_memoria);
+
         t_job_placa* job = quitar_job(jid);
+
+        if(job != NULL){
+            // cada asignación: libera sus marcos y sus slots del Offload (reusa lo de FREE)
+            void liberar_asignacion(void* elemento){
+                t_asignacion* asignacion = elemento;
+                liberar_paginas(job, asignacion->pagina_inicio, asignacion->cant_paginas);
+            }
+            list_iterate(job->asignaciones, liberar_asignacion);
+        }
+
+    pthread_mutex_unlock(&mutex_memoria);
     pthread_mutex_unlock(&mutex_jobs);
 
     if(job == NULL){
-        log_warning(placa_logger,"FINALIZAR_JOB de un JID inexistente: %u ", jid);
+        log_warning(placa_logger, "FINALIZAR_JOB de un JID inexistente: %u ", jid);
         return;
     }
 
+    // las estructuras se liberan sin mutex: el Job ya no está en la lista
     string_array_destroy(job->instrucciones);
-    list_destroy_and_destroy_elements(job->tabla_paginas,free);
+    list_destroy_and_destroy_elements(job->tabla_paginas, free);
     list_destroy_and_destroy_elements(job->asignaciones, free);
     free(job);
 
     log_debug(placa_logger, "## JID: %u - Job Finalizado", jid);
-
 }
 
 // [Enunciado pág. 16 - Core / Fetch] + [pág. 21 - Memoria de Instrucciones]
@@ -153,3 +167,4 @@ char* obtener_instruccion(uint32_t jid, uint32_t pc, int* motivo_error){
     return instruccion;
 
 }
+
