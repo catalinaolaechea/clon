@@ -5,6 +5,7 @@
 #include "jobs.h"
 #include "memoria.h"
 #include "offload.h"
+#include "reemplazo.h"
 
 static void* atender_cliente(void* socket);
 
@@ -34,6 +35,8 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
 
     }
+
+    inicializar_reemplazo();
 
     lista_core = list_create();
     lista_jobs = list_create();
