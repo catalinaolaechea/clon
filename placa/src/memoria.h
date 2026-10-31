@@ -94,5 +94,7 @@ void liberar_espacio(uint32_t jid, uint32_t dir_logica);
 // Toma y suelta los mutex adentro: durante el acceso al Offload no los tiene tomados.
 void cargar_pagina(uint32_t jid, uint32_t nro_pagina);
 
+// Entrada de la página que ocupa el marco, o NULL si está libre, en tránsito o no coincide.
+t_entrada_pagina* entrada_de_marco(int nro_marco);
 
 #endif

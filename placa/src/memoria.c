@@ -503,7 +503,7 @@ static int buscar_marco_libre(){
 //devuelve la entrada de la pagina que ocupa el marco,
 // o null si el marco esta libre o la tabla no coincide con el marco
 
-static t_entrada_pagina* entrada_de_marco(int nro_marco){
+t_entrada_pagina* entrada_de_marco(int nro_marco){
 
     t_marco* marco = &marcos[nro_marco];
 
