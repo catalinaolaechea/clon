@@ -946,3 +946,60 @@ t_storage_resultado_escritura storage_checkpoint_guardar(const char* nombre, con
    operacion_destruir(operacion);
    return resultado;
 }
+
+static t_storage_resultado_escritura planificar_eliminacion(const char* nombre, uint8_t* bloque, uint32_t* cadena, t_storage_operacion* operacion) {
+   t_storage_entrada_directorio entrada;
+   uint32_t largo;
+
+   t_storage_resultado_lectura busqueda = buscar_entrada(nombre, bloque, &entrada, NULL);
+
+   if (busqueda == STORAGE_LECTURA_ERROR) {
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   if (busqueda == STORAGE_LECTURA_NO_EXISTE) {
+      return STORAGE_ESCRITURA_NO_EXISTE;
+   }
+
+   if (!recorrer_cadena(&entrada, bloque, cadena, &largo)) {
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   for (uint32_t i = 0; i < largo; i++) {
+      if (!agregar_mod_fat(operacion, cadena[i], STORAGE_FAT_LIBRE)) {
+         return STORAGE_ESCRITURA_ERROR;
+      }
+   }
+
+   operacion->entrada = (t_storage_entrada_directorio) { .nro_entrada = entrada.nro_entrada };
+   return STORAGE_ESCRITURA_OK;
+}
+
+t_storage_resultado_escritura storage_checkpoint_eliminar(const char* nombre) {
+   uint8_t* bloque                = malloc(fs.layout.tam_bloque);
+   uint32_t* cadena               = malloc(fs.layout.bloques_datos * sizeof(uint32_t));
+   t_storage_operacion* operacion = operacion_crear();
+
+   if (bloque == NULL || cadena == NULL || operacion == NULL) {
+      log_error(fs.logger, "No hay memoria para eliminar el checkpoint \"%s\".", nombre);
+      free(bloque);
+      free(cadena);
+      operacion_destruir(operacion);
+      return STORAGE_ESCRITURA_ERROR;
+   }
+
+   pthread_mutex_lock(&mutex_filesystem);
+
+   t_storage_resultado_escritura resultado = planificar_eliminacion(nombre, bloque, cadena, operacion);
+
+   if (resultado == STORAGE_ESCRITURA_OK && !aplicar_operacion(operacion, bloque)) {
+      resultado = STORAGE_ESCRITURA_ERROR;
+   }
+
+   pthread_mutex_unlock(&mutex_filesystem);
+
+   free(bloque);
+   free(cadena);
+   operacion_destruir(operacion);
+   return resultado;
+}

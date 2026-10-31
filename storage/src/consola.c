@@ -351,5 +351,17 @@ static void comando_rm(char** palabras) {
       return;
    }
 
-   printf("RM %s: pendiente (SIS-81)\n", palabras[1]);
+   switch (storage_checkpoint_eliminar(palabras[1])) {
+   case STORAGE_ESCRITURA_OK:
+      printf("%s: eliminado\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_NO_EXISTE:
+      printf("No existe el checkpoint \"%s\"\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_SIN_ESPACIO:
+   case STORAGE_ESCRITURA_DIRECTORIO_LLENO:
+   case STORAGE_ESCRITURA_ERROR:
+      printf("No se pudo eliminar \"%s\" (ver el log)\n", palabras[1]);
+      break;
+   }
 }

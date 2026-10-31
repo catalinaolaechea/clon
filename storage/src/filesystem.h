@@ -164,4 +164,6 @@ t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t
 
 t_storage_resultado_escritura storage_checkpoint_guardar(const char* nombre, const uint8_t* contenido, uint32_t tamanio);
 
+t_storage_resultado_escritura storage_checkpoint_eliminar(const char* nombre);
+
 #endif // para cerrar el #ifndef
