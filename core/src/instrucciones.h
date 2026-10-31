@@ -2,16 +2,15 @@
 #define INSTRUCCIONES_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <utils/contexto.h>
 
 #define MAX_PARAMETROS 8
 
-// Una linea de pseudocodigo ya separada en nombre y parametros (resultado del DECODE).
-// 'linea' es una copia propia; 'nombre' y 'parametros' apuntan adentro de esa copia.
 typedef struct {
     char* linea;
-    char* nombre;                        // "SET", "JNZ", ...
-    char* parametros[MAX_PARAMETROS];    // "AX", "3", ...
+    char* nombre;                        
+    char* parametros[MAX_PARAMETROS];    
     int cantidad_parametros;
 } t_instruccion;
 
@@ -22,8 +21,6 @@ typedef enum {
     EJECUCION_ERROR           // parametros invalidos (registro inexistente, cantidad, etc.)
 } t_resultado_ejecucion;
 
-// DECODE: separa la linea en nombre y parametros. Devuelve NULL si la linea esta vacia
-// o tiene mas de MAX_PARAMETROS parametros. Se libera con destruir_instruccion().
 t_instruccion* decodificar_instruccion(const char* linea);
 void destruir_instruccion(t_instruccion* instruccion);
 
@@ -35,9 +32,9 @@ char* parametros_a_string(const t_instruccion* instruccion);
 // o NULL si no existe.
 uint32_t* registro_por_nombre(t_contexto* contexto, const char* nombre);
 
-// EXECUTE de las instrucciones basicas sobre los registros del contexto. NO suma 1 al PC:
-// eso lo decide el ciclo segun el resultado (EJECUCION_OK suma, EJECUCION_PC_MODIFICADO no).
-// Los registros son uint32_t: SUB por debajo de 0 da la vuelta (aritmetica sin signo de C).
+// numero o registro (su contenido)
+bool valor_de(t_contexto* contexto, const char* operando, uint32_t* valor);
+
 t_resultado_ejecucion ejecutar_basica(const t_instruccion* instruccion, t_contexto* contexto);
 
 #endif
