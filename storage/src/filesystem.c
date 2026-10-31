@@ -459,38 +459,48 @@ t_list* storage_directorio_listar(void) {
    //! tenemos los mismos varios hilos tocando "volumen.dat" en Storage, solo q aca el comando es LS. Solucionamos igualmente con un mutex asi evitamos errores de sincronizacion y cond. carrera 
    pthread_mutex_lock(&mutex_filesystem);
 
-   // recorro todos los bloques del directorio (0 a 63), la condicion "ok && ..." es una forma de cortar sin return, si algo falla en una iteracion directamente corta aca y no vuelve a iterar 
+   // entramos a la seccion critica, recorro todos los bloques del directorio (0 a 63), la condicion "ok && ..." es una forma de cortar sin return, si algo falla en una iteracion directamente corta aca y no vuelve a iterar 
    for (uint32_t i = 0; ok && i < fs.layout.bloques_directorio; i++) {
+      // en cada iteracion mandamos a leer dicho bloque de directorio pero salteando directamente el superbloque (0) y la FAT (1..64), pasando unicamente al bloque de directorio a leer (asi es la estructura de la particion). repasar "storage_bloque_leer()" (aplica "RETARDO", valida rango, hace fseek+fread y devuelve true, si falla loguea y devuelve false) 
       ok = storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque);  
 
+      // del bloque de directorio recorro todas sus entradas 
       for (uint32_t j = 0; ok && j < entradas_por_bloque; j++) {
-         const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA;
 
+         // por cada bloque de entrada usando "aritmetica de punteros" hacemos que nuestro buffer "bloque" que primero apunta al primer byte vaya apuntando a los demas bloques sumandole n cantidad de bytes (tamaño de un bloque de entrada)
+         const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA; 
+
+         // el byte 0 de cada entrada es el estado (0 libre, 1 ocupada), de "cruda" que esta apuntando a cada entrada miramos si su estado NO es ocupada seguimos nomas ya que no representa un checkpoint osea un archivo en el bloque de directorio, cuando encontremos una que sea ocupada entonces ahi es que vamos a intentar listarla
          if (cruda[STORAGE_DIR_OFF_ESTADO] != STORAGE_DIR_ESTADO_OCUPADA) {
             continue;
          }
 
+         // con la entrada ocupada entonces creamos una instancia de entrada de directorio y pedimos memoria del tamaño de la misma
          t_storage_entrada_directorio* entrada = malloc(sizeof(t_storage_entrada_directorio));
+         
+         // raro pero lo mismo, por las dudas que el malloc no responda bien 
          if (entrada == NULL) {  
             log_error(fs.logger, "No hay memoria para la entrada %u del directorio.", i * entradas_por_bloque + j);
             ok = false;
             break;
          }
 
+         // y es aca donde terminamos de pasar la entrada de directorio "en disco" para poder almacenarla en la estructura preparada "en memoria", nomas que la dejamos en otra funcion porque posiblemente la tengamos que reutilizar en el proximo check 
          deserializar_entrada(cruda, i * entradas_por_bloque + j, entrada);
-         list_add(ocupadas, entrada);
+         list_add(ocupadas, entrada);  // y dicha instancia la guardamos en la lista de entradas de la commons (unicamente las ocupadas)
       }
    }
 
-   pthread_mutex_unlock(&mutex_filesystem);
-   free(bloque);
+   pthread_mutex_unlock(&mutex_filesystem);  //! cerramos el candado, salimos de la seccion critica, soltamos la llave para que el que este esperando si algun hilo lo hay pueda entrar 
+   free(bloque);  // liberamos el buffer que usamos para recorrer el directorio y las entradas del directorio 
 
+   // al final de todo nuestra flag deberia estar todo ok, en caso de no estar todo bien signfica que lo recopilado esta corrupto, mostrar un comando LS estaria mostrando mal, entonces directamente matamos todos los elementos de la lista de "ocupadas" y no devolvemos nada 
    if (!ok) {
       list_destroy_and_destroy_elements(ocupadas, free);
       return NULL;
    }
 
-   return ocupadas;  // como notamos le damos ownership al que llama la funcion, no le liberamos la lista de entradas ocupadas, que la libere el usuario cuando lo considere 
+   return ocupadas;  // si todo funco bien devolvemos la lista, le damos ownership al que llama la funcion, no le liberamos la lista de entradas ocupadas, que la libere el usuario cuando lo considere 
 }
 
 //! lo llevamos a una funcion aparte para que no se alargue tanto la funcion de arriba, y creo que se usa en siguiente Check 4 
@@ -504,6 +514,8 @@ static void deserializar_entrada(const uint8_t* cruda, uint32_t nro_entrada, t_s
    entrada->tamanio       = leer_uint32(cruda, STORAGE_DIR_OFF_TAMANIO);
    entrada->primer_bloque = leer_uint32(cruda, STORAGE_DIR_OFF_PRIMER_BLOQUE);
 }
+
+
 static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* bloque, t_storage_entrada_directorio* encontrada) {
    uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;
 

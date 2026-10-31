@@ -212,7 +212,7 @@ static void comando_info(void) {
    imprimir_superbloque(superbloque.firma, superbloque.tam_bloque, superbloque.cant_bloques, superbloque.bloques_directorio);  // va mostrando ahora con los datos guardados en la estructura pensada para memoria de un superbloque de lo leido en disco 
 }
 
-//! para comando LS arma una tabla de 3 partes (encabezado, fila y resumen), todavia no lee el directorio muestra una fila inventada para que se vea el formato 
+//! para comando LS reconoce la palabra, valida que no traiga argumentos, pide datos a "filesystem.c" y los imprime con las funciones de formato del issue-28. No toca el disco ni el mutex 
 static void comando_ls(void) {
    t_storage_layout layout = storage_filesystem_layout();  // lo mismo que arriba
 
