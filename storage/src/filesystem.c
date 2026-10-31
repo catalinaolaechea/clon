@@ -459,9 +459,9 @@ t_list* storage_directorio_listar(void) {
    //! tenemos los mismos varios hilos tocando "volumen.dat" en Storage, solo q aca el comando es LS. Solucionamos igualmente con un mutex asi evitamos errores de sincronizacion y cond. carrera 
    pthread_mutex_lock(&mutex_filesystem);
 
-   // 
+   // recorro todos los bloques del directorio (0 a 63), la condicion "ok && ..." es una forma de cortar sin return, si algo falla en una iteracion directamente corta aca y no vuelve a iterar 
    for (uint32_t i = 0; ok && i < fs.layout.bloques_directorio; i++) {
-      ok = storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque);
+      ok = storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque);  
 
       for (uint32_t j = 0; ok && j < entradas_por_bloque; j++) {
          const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA;
@@ -471,7 +471,7 @@ t_list* storage_directorio_listar(void) {
          }
 
          t_storage_entrada_directorio* entrada = malloc(sizeof(t_storage_entrada_directorio));
-         if (entrada == NULL) {
+         if (entrada == NULL) {  
             log_error(fs.logger, "No hay memoria para la entrada %u del directorio.", i * entradas_por_bloque + j);
             ok = false;
             break;
@@ -503,4 +503,137 @@ static void deserializar_entrada(const uint8_t* cruda, uint32_t nro_entrada, t_s
 
    entrada->tamanio       = leer_uint32(cruda, STORAGE_DIR_OFF_TAMANIO);
    entrada->primer_bloque = leer_uint32(cruda, STORAGE_DIR_OFF_PRIMER_BLOQUE);
+}
+static t_storage_resultado_lectura buscar_entrada(const char* nombre, uint8_t* bloque, t_storage_entrada_directorio* encontrada) {
+   uint32_t entradas_por_bloque = fs.layout.tam_bloque / STORAGE_DIR_BYTES_ENTRADA;
+
+   for (uint32_t i = 0; i < fs.layout.bloques_directorio; i++) {
+      if (!storage_bloque_leer(fs.layout.primer_bloque_directorio + i, bloque)) {
+         return STORAGE_LECTURA_ERROR;
+      }
+
+      for (uint32_t j = 0; j < entradas_por_bloque; j++) {
+         const uint8_t* cruda = bloque + j * STORAGE_DIR_BYTES_ENTRADA;
+
+         if (cruda[STORAGE_DIR_OFF_ESTADO] != STORAGE_DIR_ESTADO_OCUPADA) {
+            continue;
+         }
+
+         deserializar_entrada(cruda, i * entradas_por_bloque + j, encontrada);
+
+         if (strcmp(encontrada->nombre, nombre) == 0) {
+            return STORAGE_LECTURA_OK;
+         }
+      }
+   }
+
+   return STORAGE_LECTURA_NO_EXISTE;
+}
+
+static bool leer_entrada_fat(uint32_t nro_entrada, uint8_t* bloque, uint32_t* valor) {
+   uint64_t byte_en_fat = (uint64_t) nro_entrada * STORAGE_FAT_BYTES_ENTRADA;
+   uint32_t bloque_fat  = fs.layout.primer_bloque_fat + (uint32_t) (byte_en_fat / fs.layout.tam_bloque);
+   uint32_t offset      = (uint32_t) (byte_en_fat % fs.layout.tam_bloque);
+
+   if (!storage_bloque_leer(bloque_fat, bloque)) {
+      return false;
+   }
+
+   *valor = leer_uint32(bloque, offset);
+   log_info(fs.logger, "## Acceso FAT - Entrada: %u - Valor: 0x%08X", nro_entrada, *valor);
+   return true;
+}
+
+static bool es_bloque_de_datos(uint32_t nro_bloque) {
+   return nro_bloque >= fs.layout.primer_bloque_datos && nro_bloque < fs.layout.cant_bloques;
+}
+
+static bool seguir_cadena(const t_storage_entrada_directorio* entrada, uint8_t* bloque, uint8_t* destino, uint32_t a_leer) {
+   uint32_t actual   = entrada->primer_bloque;
+   uint32_t copiados = 0;
+   uint32_t vueltas  = 0;
+
+   while (copiados < a_leer) {
+      if (!es_bloque_de_datos(actual)) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": el bloque %u no es un bloque de datos (%u..%u).",
+                   entrada->nombre, actual, fs.layout.primer_bloque_datos, fs.layout.cant_bloques - 1);
+         return false;
+      }
+
+      vueltas++;
+      if (vueltas > fs.layout.cant_bloques) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": se recorrieron mas de %u bloques sin llegar al final (hay un ciclo en la FAT).",
+                   entrada->nombre, fs.layout.cant_bloques);
+         return false;
+      }
+
+      if (!storage_bloque_leer(actual, bloque)) {
+         return false;
+      }
+      log_info(fs.logger, "## Acceso Bloque - Checkpoint: %s - Bloque: %u", entrada->nombre, actual);
+
+      uint32_t faltan         = a_leer - copiados;
+      uint32_t de_este_bloque = (faltan < fs.layout.tam_bloque) ? faltan : fs.layout.tam_bloque;
+      memcpy(destino + copiados, bloque, de_este_bloque);
+      copiados += de_este_bloque;
+
+      if (copiados == a_leer) {
+         break;
+      }
+
+      uint32_t valor;
+      if (!leer_entrada_fat(actual, bloque, &valor)) {
+         return false;
+      }
+
+      if ((valor & STORAGE_FAT_MASCARA) == STORAGE_FAT_EOF) {
+         log_error(fs.logger, "Cadena rota en el checkpoint \"%s\": la cadena termina en el bloque %u y todavia faltan %u bytes de los %u que dice el directorio.",
+                   entrada->nombre, actual, a_leer - copiados, entrada->tamanio);
+         return false;
+      }
+
+      actual = valor & STORAGE_FAT_MASCARA;
+   }
+
+   return true;
+}
+
+t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t max_bytes, uint8_t** contenido, uint32_t* leidos) {
+   uint8_t* bloque = malloc(fs.layout.tam_bloque);
+   if (bloque == NULL) {
+      log_error(fs.logger, "No hay memoria para leer el checkpoint \"%s\" (%u bytes).", nombre, fs.layout.tam_bloque);
+      return STORAGE_LECTURA_ERROR;
+   }
+
+   uint8_t* datos  = NULL;
+   uint32_t a_leer = 0;
+   t_storage_entrada_directorio entrada;
+
+   pthread_mutex_lock(&mutex_filesystem);
+
+   t_storage_resultado_lectura resultado = buscar_entrada(nombre, bloque, &entrada);
+
+   if (resultado == STORAGE_LECTURA_OK) {
+      a_leer = (max_bytes < entrada.tamanio) ? max_bytes : entrada.tamanio;
+      datos  = malloc(a_leer > 0 ? a_leer : 1);
+
+      if (datos == NULL) {
+         log_error(fs.logger, "No hay memoria para los %u bytes del checkpoint \"%s\".", a_leer, nombre);
+         resultado = STORAGE_LECTURA_ERROR;
+      } else if (!seguir_cadena(&entrada, bloque, datos, a_leer)) {
+         resultado = STORAGE_LECTURA_ERROR;
+      }
+   }
+
+   pthread_mutex_unlock(&mutex_filesystem);
+   free(bloque);
+
+   if (resultado != STORAGE_LECTURA_OK) {
+      free(datos);
+      return resultado;
+   }
+
+   *contenido = datos;
+   *leidos    = a_leer;
+   return STORAGE_LECTURA_OK;
 }

@@ -73,6 +73,12 @@ typedef struct {
    uint32_t primer_bloque;  // bytes 28..31: donde arranca la cadena en la FAT 
 } t_storage_entrada_directorio;
 
+typedef enum {
+   STORAGE_LECTURA_OK,
+   STORAGE_LECTURA_NO_EXISTE,
+   STORAGE_LECTURA_ERROR
+} t_storage_resultado_lectura;
+
 
 //! ─────────────────────────── LAYOUT DEL VOLUMEN ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 // Todas las cuentas del reparto de bloques, resueltas UNA sola vez al arrancar y guardadas acá. La idea es no andar recalculando "donde empieza el directorio" cada vez que se lo necesita, y sobre todo no hardcodear ningun numero: todo sale del .config
@@ -129,5 +135,7 @@ bool storage_bloque_escribir(uint32_t nro_bloque, const void* origen);
 bool storage_superbloque_leer(t_storage_superbloque* superbloque);
 
 t_list* storage_directorio_listar(void);
+
+t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t max_bytes, uint8_t** contenido, uint32_t* leidos);
 
 #endif // para cerrar el #ifndef

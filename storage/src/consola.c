@@ -23,6 +23,7 @@
 
 #define MAX_CARACTERES_NOMBRE (STORAGE_DIR_BYTES_NOMBRE - 1) // adecuandose a la cte de bytes de la entrada de un directorio, al nombre le alcanza como maximo 23 de esos 32 bytes, uno menos para contar con el "\0"
 #define MAX_BYTES_WRITE 20  // del enunciado nos piden que "WRITE" escriba hasta 20 bytes 
+#define CAT_BYTES_POR_RENGLON 16
 
 //! estos prototipos son porque en C una funcion tiene que estar declarada antes para que alguien la llame en las funciones que declaramos aca. Son "static" porque son privadas de este archivo 
 static void ejecutar_comando(char* linea);
@@ -38,6 +39,7 @@ static void imprimir_resumen_ls(uint32_t ocupadas, uint32_t total);
 static void comando_info(void);
 static void comando_ls(void);
 static void comando_cat(char** palabras);
+static void imprimir_hexa(const char* nombre, const uint8_t* bytes, uint32_t leidos, uint32_t pedidos);
 static void comando_write(char** palabras);
 static void comando_rm(char** palabras);
 
@@ -270,7 +272,47 @@ static void comando_cat(char** palabras) {
       return;
    }
 
-   printf("CAT %s %u bytes: pendiente (SIS-79)\n", palabras[1], cantidad);
+   uint8_t* contenido = NULL;
+   uint32_t leidos = 0;
+
+   switch (storage_checkpoint_leer(palabras[1], cantidad, &contenido, &leidos)) {
+   case STORAGE_LECTURA_NO_EXISTE:
+      printf("No existe el checkpoint \"%s\"\n", palabras[1]);
+      return;
+   case STORAGE_LECTURA_ERROR:
+      printf("No se pudo leer el checkpoint \"%s\" (ver el log)\n", palabras[1]);
+      return;
+   case STORAGE_LECTURA_OK:
+      break;
+   }
+
+   imprimir_hexa(palabras[1], contenido, leidos, cantidad);
+   free(contenido);
+}
+
+static void imprimir_hexa(const char* nombre, const uint8_t* bytes, uint32_t leidos, uint32_t pedidos) {
+   if (leidos < pedidos) {
+      printf("%s: se pidieron %u bytes y el checkpoint tiene %u\n", nombre, pedidos, leidos);
+   } else {
+      printf("%s: primeros %u bytes\n", nombre, leidos);
+   }
+
+   if (leidos == 0) {
+      printf("(el checkpoint esta vacio)\n");
+      return;
+   }
+
+   for (uint32_t i = 0; i < leidos; i++) {
+      if (i % CAT_BYTES_POR_RENGLON == 0) {
+         printf("%08X ", i);
+      }
+
+      printf(" %02X", bytes[i]);
+
+      if (i % CAT_BYTES_POR_RENGLON == CAT_BYTES_POR_RENGLON - 1 || i == leidos - 1) {
+         printf("\n");
+      }
+   }
 }
 
 static void comando_write(char** palabras) {
