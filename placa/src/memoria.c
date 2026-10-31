@@ -496,6 +496,8 @@ void liberar_espacio(uint32_t jid, uint32_t dir_logica){
 static int buscar_marco_libre(){
     for(int i = 0; i < cant_marcos; i++ )
         if(!marcos[i].ocupado) return i;
+
+    return -1;
 }
 
 //devuelve la entrada de la pagina que ocupa el marco,
@@ -520,9 +522,18 @@ static t_entrada_pagina* entrada_de_marco(int nro_marco){
 
     return entrada;
 
-
-
 }
 
 
+static int elegir_victima(){
+    for(int i=0; i < cant_marcos; i++){
+        t_entrada_pagina* entrada = entrada_de_marco(i);
+        //NULL si el marco esta libre o no coincide
+        if(entrada != NULL && !entrada->lockeada)
+            return i;
+        //primera pagina no lockeada, victima
+    }
+
+    return -1;
+}
 
