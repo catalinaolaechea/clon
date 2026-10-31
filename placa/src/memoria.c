@@ -431,10 +431,9 @@ static void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad
 
 }
 
-bool liberar_en_job(uint32_t jid, uint32_t dir_logica, uint32_t* tamanio){
+static bool liberar_en_job(uint32_t jid, uint32_t dir_logica, uint32_t* tamanio){
 
     t_job_placa* job = buscar_job(jid);
-
 
     if(job == NULL){
         log_warning(placa_logger, "FREE de un JID inexistente: %u",jid);
