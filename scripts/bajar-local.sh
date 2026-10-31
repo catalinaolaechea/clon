@@ -17,3 +17,4 @@ tac "$PIDS" | while read -r pid nombre; do
     kill "$pid" 2>/dev/null && echo "    $nombre (pid $pid) bajado"
 done
 rm -f "$PIDS"
+rm -f runtime/planificador.in   # el FIFO del teclado del Planificador
