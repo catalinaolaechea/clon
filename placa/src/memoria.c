@@ -411,3 +411,83 @@ bool asignar_espacio(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica){
 
 }
 
+
+//Liberar cantidad de paginas desde inicio 
+static void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad){
+
+    for(uint32_t i = 0; i<cantidad; i++ ){
+        t_entrada_pagina* entrada = list_get(job->tabla_paginas, inicio + i);
+    
+        if(entrada->presente){
+            marcos[entrada->marco].ocupado=false;
+        }
+
+        liberar_slot(entrada->slot_offload);
+
+        memset(entrada, 0, sizeof(t_entrada_pagina));
+        entrada->slot_offload = SLOT_SIN_ASIGNAR;
+
+    }
+
+}
+
+bool liberar_en_job(uint32_t jid, uint32_t dir_logica, uint32_t* tamanio){
+
+    t_job_placa* job = buscar_job(jid);
+
+
+    if(job == NULL){
+        log_warning(placa_logger, "FREE de un JID inexistente: %u",jid);
+
+        return false;
+    }
+
+    bool empieza_ahi(void* elemento){
+        t_asignacion* asignacion = elemento;
+        return asignacion->pagina_inicio * TAM_PAGINA == dir_logica;
+    }
+
+    t_asignacion* asignacion = list_find(job->asignaciones, empieza_ahi);
+
+    if(asignacion == NULL){
+
+        log_warning(placa_logger, "FREE de una dirección que no es inicio de ninguna asignación - JID: %u - Dirección Lógica: %u", jid, dir_logica);
+        return false;
+    }
+
+    liberar_paginas(job,asignacion->pagina_inicio, asignacion->cant_paginas);
+
+    *tamanio = asignacion->tamanio;
+
+    list_remove_element(job->asignaciones, asignacion);
+
+    free(asignacion);
+
+    return true;
+
+}
+
+// [Enunciado pág. 22 - Liberación de espacio]
+// Siempre se responde FREE_OK, aunque no haya nada que liberar (D4).
+// Log obligatorio (pág. 24): "## JID: <JID> - Liberación - Dirección Lógica: <DIR> - Tamaño: <TAM>"
+
+void liberar_espacio(uint32_t jid, uint32_t dir_logica){
+
+    uint32_t tamanio = 0;
+
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+
+        bool liberado = liberar_en_job(jid, dir_logica, &tamanio);
+
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(liberado)
+        log_info(placa_logger, "## JID: %u - Liberación - Dirección Lógica: %u - Tamaño: %u", jid, dir_logica, tamanio);
+
+
+}
+
+
+
