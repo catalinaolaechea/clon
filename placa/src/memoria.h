@@ -2,6 +2,7 @@
 #define MEMORIA_H_
 
 #include "inicializador.h"
+#include "jobs.h"
 
 //memoria fisica
 extern void* memoria;
@@ -96,5 +97,9 @@ void cargar_pagina(uint32_t jid, uint32_t nro_pagina);
 
 // Entrada de la página que ocupa el marco, o NULL si está libre, en tránsito o no coincide.
 t_entrada_pagina* entrada_de_marco(int nro_marco);
+
+void liberar_paginas(t_job_placa* job, uint32_t inicio, uint32_t cantidad);
+
+
 
 #endif
