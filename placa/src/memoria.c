@@ -537,3 +537,145 @@ static int elegir_victima(){
     return -1;
 }
 
+
+static bool preparar_carga(uint32_t jid, uint32_t nro_pagina, t_carga* carga){
+
+    t_job_placa* job = buscar_job(jid);
+
+    if(job == NULL){
+        log_warning(placa_logger, "CARGAR_PAGINA de un JID inexistente: %u", jid);
+        return false;
+    }
+
+    if(!pagina_asignada(job,nro_pagina) || nro_pagina >= (uint32_t) list_size(job->tabla_paginas)){
+        log_warning(placa_logger, "CARGAR_PAGINA de una página no asignada - JID: %u - Página: %u", jid, nro_pagina);
+        return false;
+    }
+
+    t_entrada_pagina* entrada = list_get(job->tabla_paginas, nro_pagina);
+
+    if(entrada->presente)
+        return false;
+    
+    //setear todo los valores en 0 y solo asignar ese valor
+    *carga = (t_carga) { .hay_victima=false };
+
+    carga->marco = buscar_marco_libre();
+
+    if(carga->marco == -1){
+        carga->marco = elegir_victima();
+
+        if(carga->marco == -1){
+            log_error(placa_logger, "CARGAR_PAGINA sin víctima posible: todas las páginas en memoria están lockeadas - JID: %u - Página: %u", jid, nro_pagina);
+            return false;
+        }
+
+
+        t_entrada_pagina* victima = entrada_de_marco(carga->marco);
+
+        carga->hay_victima = true;
+        carga->modificada_victima = victima->modificado;
+
+        carga->victima_jid = marcos[carga->marco].jid;
+        carga->victima_pagina = marcos[carga->marco].nro_pagina;
+
+        carga->victima_slot = victima->slot_offload;
+
+        victima->presente = false; //la victima ya no esta en RAM
+
+        log_info(placa_logger, "## Reemplazo - Marco: %d - JID Víctima: %u - Página Víctima: %u",carga->marco, carga->victima_jid, carga->victima_pagina);
+
+    }
+
+
+    marcos[carga->marco] = (t_marco){
+        .ocupado =true, 
+        .jid = jid,
+        .nro_pagina = nro_pagina };
+    
+    carga->slot = entrada->slot_offload;
+    carga->leer_del_offload = entrada->en_offload;
+
+    return true;
+
+}
+
+//bajar la victima (si estaba modificada) y trae la pagina nueva al marco
+
+static void mover_paginas(t_carga* carga){
+
+    void* marco = (char*) memoria + carga->marco *TAM_PAGINA;
+
+    if(carga->hay_victima && carga->modificada_victima){
+        escribir_pagina_offload(carga->victima_slot,marco);
+
+        log_info(placa_logger, "## JID: %u - Bajada al Offload - Página: %u", carga->victima_jid, carga->victima_pagina);
+    }
+
+    if(carga->leer_del_offload)
+        leer_pagina_offload(carga->slot,marco);
+    else
+        memset(marco,0,TAM_PAGINA);
+
+}
+
+static void terminar_carga(uint32_t jid, uint32_t nro_pagina, t_carga* carga){
+
+    t_job_placa* job = buscar_job(jid);
+
+    if(job == NULL) return;
+
+    t_entrada_pagina* entrada = list_get(job->tabla_paginas,nro_pagina);
+
+    entrada->presente = true;
+    entrada->marco = carga->marco;
+    entrada->modificado = false;
+
+    registrar_acceso(entrada);
+
+    if(carga->hay_victima && carga->modificada_victima){
+        t_job_placa* job_victima = buscar_job(carga->victima_jid);
+
+        if(job_victima !=NULL){
+            t_entrada_pagina* victima = list_get(job_victima->tabla_paginas, carga->victima_pagina);
+            
+            victima->en_offload = true;
+            victima->modificado = false;
+        }
+
+    }
+
+}
+
+// [Enunciado pág. 23 - Carga de página]
+// La pide el Planificador tras un Page Fault. Deja la página en un marco (libre, o el de una víctima).
+// Siempre se responde CARGAR_PAGINA_OK: los casos raros quedan en el log (decisión del grupo).
+// Logs obligatorios (pág. 24), en este orden: Reemplazo, Bajada al Offload, Subida a Memoria.
+
+void cargar_pagina(uint32_t jid, uint32_t nro_pagina){
+
+    t_carga carga;
+
+    // FASE 1: decidir y reservar
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+        bool hay_que_cargar = preparar_carga(jid, nro_pagina, &carga);
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    if(!hay_que_cargar) return;
+
+    //FASE 2: el disco, sin bloquear a los Cores
+    mover_paginas(&carga);
+
+    //FASE 3: dejarla presente
+    pthread_mutex_lock(&mutex_jobs);
+    pthread_mutex_lock(&mutex_memoria);
+        terminar_carga(jid, nro_pagina, &carga);
+    pthread_mutex_unlock(&mutex_memoria);
+    pthread_mutex_unlock(&mutex_jobs);
+
+    log_info(placa_logger, "## JID: %u - Subida a Memoria - Página: %u - Marco: %d", jid, nro_pagina, carga.marco);
+
+}
+
