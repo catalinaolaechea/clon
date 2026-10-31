@@ -328,13 +328,21 @@ static void comando_write(char** palabras) {
       return;
    }
 
-   printf("WRITE %s: se escribirian %u bytes:", palabras[1], cantidad);  // si esta todo ok antes de escribir nada mostramos un "placeholder" con lo que escribiria, para ver si la conversion anduvo bien
-
-   for (uint32_t i = 0; i < cantidad; i++) {  // recorremos unicamente hasta la cantidad posible que tome aquello en hexa que queremos escribir 
-      printf(" %02X", bytes[i]);  // imprimimos entonces cada byte con las siguientes condiciones, sale en hexa, en mayuscula, con 2 digitos y separado por un espacio 
+   switch (storage_checkpoint_guardar(palabras[1], bytes, cantidad)) {
+   case STORAGE_ESCRITURA_OK:
+      printf("%s: se guardaron %u bytes\n", palabras[1], cantidad);
+      break;
+   case STORAGE_ESCRITURA_DIRECTORIO_LLENO:
+      printf("No se pudo guardar \"%s\": el directorio esta lleno\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_SIN_ESPACIO:
+      printf("No se pudo guardar \"%s\": no quedan bloques libres suficientes\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_NO_EXISTE:
+   case STORAGE_ESCRITURA_ERROR:
+      printf("No se pudo guardar \"%s\" (ver el log)\n", palabras[1]);
+      break;
    }
-
-   printf(" (pendiente SIS-81)\n");
 }
 
 static void comando_rm(char** palabras) {
@@ -343,5 +351,17 @@ static void comando_rm(char** palabras) {
       return;
    }
 
-   printf("RM %s: pendiente (SIS-81)\n", palabras[1]);
+   switch (storage_checkpoint_eliminar(palabras[1])) {
+   case STORAGE_ESCRITURA_OK:
+      printf("%s: eliminado\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_NO_EXISTE:
+      printf("No existe el checkpoint \"%s\"\n", palabras[1]);
+      break;
+   case STORAGE_ESCRITURA_SIN_ESPACIO:
+   case STORAGE_ESCRITURA_DIRECTORIO_LLENO:
+   case STORAGE_ESCRITURA_ERROR:
+      printf("No se pudo eliminar \"%s\" (ver el log)\n", palabras[1]);
+      break;
+   }
 }

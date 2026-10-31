@@ -79,6 +79,30 @@ typedef enum {
    STORAGE_LECTURA_ERROR
 } t_storage_resultado_lectura;
 
+typedef enum {
+   STORAGE_ESCRITURA_OK,
+   STORAGE_ESCRITURA_NO_EXISTE,
+   STORAGE_ESCRITURA_SIN_ESPACIO,
+   STORAGE_ESCRITURA_DIRECTORIO_LLENO,
+   STORAGE_ESCRITURA_ERROR
+} t_storage_resultado_escritura;
+
+typedef struct {
+   uint32_t nro_entrada;
+   uint32_t valor;
+} t_storage_mod_fat;
+
+typedef struct {
+   uint32_t nro_bloque;
+   uint8_t* contenido;
+} t_storage_mod_bloque;
+
+typedef struct {
+   t_storage_entrada_directorio entrada;
+   t_list* fat;
+   t_list* bloques;
+} t_storage_operacion;
+
 
 //! ─────────────────────────── LAYOUT DEL VOLUMEN ─────────────────────────── (REPASAR DESPUES Y TERMINAR)
 // Todas las cuentas del reparto de bloques, resueltas UNA sola vez al arrancar y guardadas acá. La idea es no andar recalculando "donde empieza el directorio" cada vez que se lo necesita, y sobre todo no hardcodear ningun numero: todo sale del .config
@@ -137,5 +161,9 @@ bool storage_superbloque_leer(t_storage_superbloque* superbloque);
 t_list* storage_directorio_listar(void);
 
 t_storage_resultado_lectura storage_checkpoint_leer(const char* nombre, uint32_t max_bytes, uint8_t** contenido, uint32_t* leidos);
+
+t_storage_resultado_escritura storage_checkpoint_guardar(const char* nombre, const uint8_t* contenido, uint32_t tamanio);
+
+t_storage_resultado_escritura storage_checkpoint_eliminar(const char* nombre);
 
 #endif // para cerrar el #ifndef
