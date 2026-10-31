@@ -489,4 +489,40 @@ void liberar_espacio(uint32_t jid, uint32_t dir_logica){
 }
 
 
+// [Enunciado pág. 23 - Carga de página] / [pág. 22 - Reemplazo]
+
+//devuelve el primer marco libre o -1, si estan todos ocupados
+
+static int buscar_marco_libre(){
+    for(int i = 0; i < cant_marcos; i++ )
+        if(!marcos[i].ocupado) return i;
+}
+
+//devuelve la entrada de la pagina que ocupa el marco,
+// o null si el marco esta libre o la tabla no coincide con el marco
+
+static t_entrada_pagina* entrada_de_marco(int nro_marco){
+
+    t_marco* marco = &marcos[nro_marco];
+
+    if(!marco->ocupado) return NULL;
+
+    t_job_placa* job = buscar_job(marco->jid);
+
+    if(job==NULL || marco->nro_pagina >= (uint32_t) list_size(job->tabla_paginas))
+        return NULL;
+
+    t_entrada_pagina* entrada = list_get(job->tabla_paginas, marco->nro_pagina);
+
+    //la entrada tiene que coincidir con el marco presente y en este marco
+    if(!entrada->presente || entrada->marco != (uint32_t) nro_marco)
+        return NULL;
+
+    return entrada;
+
+
+
+}
+
+
 
