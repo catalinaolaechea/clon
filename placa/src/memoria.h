@@ -30,6 +30,7 @@ typedef struct {
     bool lockeada;
     bool uso;
     bool modificado;
+    bool en_offload;
     uint64_t ultimo_acceso;
     uint32_t slot_offload;
 }t_entrada_pagina;
@@ -40,6 +41,17 @@ typedef struct {
     uint32_t tamanio;
 }t_asignacion;
 
+
+typedef struct {
+    int marco;
+    bool hay_victima;
+    bool modificada_victima;
+    uint32_t victima_jid;
+    uint32_t victima_pagina;
+    uint32_t victima_slot;
+    bool leer_del_offload;
+    uint32_t slot;
+} t_carga;
 
 bool inicializar_memoria();
 int marcos_libres();
@@ -77,5 +89,10 @@ bool asignar_espacio(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica);
 // [Enunciado pág. 22 - Liberación de espacio] Libera la asignación que empieza en dir_logica
 // (marcos y slots del Offload). Si no hay ninguna, solo loguea. Toma los mutex adentro.
 void liberar_espacio(uint32_t jid, uint32_t dir_logica);
+
+// [Enunciado pág. 23 - Carga de página] Deja la página en memoria (con reemplazo si hace falta).
+// Toma y suelta los mutex adentro: durante el acceso al Offload no los tiene tomados.
+void cargar_pagina(uint32_t jid, uint32_t nro_pagina);
+
 
 #endif

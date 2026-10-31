@@ -142,7 +142,6 @@ void* atender_planificador(void* planificador){
         }
         
         
-        
         case LEER_MEMORIA:{
 
             uint32_t jid = buffer_read_uint32(payload);
@@ -273,6 +272,24 @@ void* atender_planificador(void* planificador){
         //   "## JID: <JID> - Bajada al Offload - Página: <NRO_PÁGINA>"
         //   "## Reemplazo - Marco: <NRO_MARCO> - JID Víctima: <JID> - Página Víctima: <NRO_PÁGINA>"
         case CARGAR_PAGINA:{
+            
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t nro_pagina = buffer_read_uint32(payload);
+
+            //elige marco o victima, baja/sube del offload y loguea
+            cargar_pagina(jid,nro_pagina);
+
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(CARGAR_PAGINA_OK);
+
+            int validar = enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger, "No se pudo responder CARGAR_PAGINA al Planificador");
+            }
+
+            eliminar_paquete(respuesta);
 
             break;
 
