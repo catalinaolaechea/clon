@@ -137,7 +137,7 @@ void* atender_planificador(void* planificador){
             }
 
             eliminar_paquete(respuesta);
-            
+
             break;
         }
         
@@ -178,6 +178,29 @@ void* atender_planificador(void* planificador){
             eliminar_paquete(respuesta);
             break;
 
+        }
+
+        case FREE:{
+            uint32_t jid = buffer_read_uint32(payload);
+            uint32_t dir_logica = buffer_read_uint32(payload);
+
+            //si la dirección no es inicio de nignuna asignación, solo deja un warning
+            liberar_espacio(jid,dir_logica);
+
+            retardo_memoria();
+
+            t_paquete* respuesta = crear_paquete(FREE_OK);
+
+            int validar= enviar_paquete(socket_cliente,respuesta);
+
+            if(validar != CONEXION_OK){
+                log_error(placa_logger,"No se pudo responder FREE al planificador");
+
+            }
+
+            eliminar_paquete(respuesta);
+
+            break;
         }
         
         case ESCRIBIR_MEMORIA:{
