@@ -143,3 +143,31 @@ void atender_alloc(int fd, int identificador_core, t_buffer* buffer) {
 
     responder_syscall(fd, identificador_core, jid, "ALLOC", respuesta);
 }
+
+void atender_free(int fd, int identificador_core, t_buffer* buffer) {
+    uint32_t jid = buffer_read_uint32(buffer);
+    uint32_t dir_logica = buffer_read_uint32(buffer);
+
+    log_info(planificador_logger, LOG_SYSCALL, jid, "FREE");
+
+    t_pcb* pcb = buscar_pcb_en_cola(ESTADO_EXEC, jid);
+    if (pcb == NULL) {
+        log_error(planificador_logger, "FREE del Job %u, que no esta en EXEC", jid);
+        responder_syscall(fd, identificador_core, jid, "FREE", crear_paquete(SYSCALL_ERROR));
+        return;
+    }
+
+    pcb->estadisticas.cantidad_syscalls++;
+
+    if (!placa_free(jid, dir_logica)) {
+        responder_syscall(fd, identificador_core, jid, "FREE", crear_paquete(SYSCALL_ERROR));
+        return;
+    }
+
+    // igual que la Placa: un FREE de una direccion que no es inicio de ninguna asignacion solo avisa
+    if (!pcb_registrar_free(pcb, dir_logica)) {
+        log_warning(planificador_logger, "FREE del Job %u en la direccion %u, que no es inicio de ninguna asignacion", jid, dir_logica);
+    }
+
+    responder_syscall(fd, identificador_core, jid, "FREE", crear_paquete(SYSCALL_OK));
+}
