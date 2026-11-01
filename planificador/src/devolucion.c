@@ -52,6 +52,12 @@ void recibir_devolucion(int identificador_core, t_buffer* buffer) {
             corto_plazo_avisar_job_ready();
             break;
         case MOTIVO_EXIT:
+            // un ALLOC rechazado ya anoto el motivo: el Job no ejecuto EXIT, no se loguea ni se cuenta
+            if (pcb->motivo_finalizacion != -1) {
+                finalizar_job(pcb, (t_motivo_finalizacion) pcb->motivo_finalizacion);
+                break;
+            }
+
             log_info(planificador_logger, LOG_SYSCALL, jid, "EXIT");
             pcb->estadisticas.cantidad_syscalls++;  // EXIT tambien cuenta: antes de imprimir las estadisticas
             finalizar_job(pcb, FINALIZACION_EXIT);  // ultimo uso de 'pcb': se libera adentro
