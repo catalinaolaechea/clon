@@ -46,6 +46,7 @@ t_pcb* pcb_crear(uint32_t jid, char* archivo_pseudocodigo) {
     temporal_create_and_stop(&pcb->espera_en_ready);
     temporal_create_and_stop(&pcb->rafaga_actual);
     pcb->asignaciones = list_create();
+    pcb->motivo_finalizacion = -1;
 
     return pcb;
 }

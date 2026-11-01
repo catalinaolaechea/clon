@@ -44,6 +44,7 @@ typedef struct {
     uint8_t syscall_pendiente;
     //Memoria
     t_list* asignaciones; // las de ALLOC todavia sin FREE: { dir_logica, tamanio }
+    int motivo_finalizacion; // -1 si no hay; si no, el t_motivo_finalizacion que anoto una syscall (ej. ALLOC sin Offload)
     //Estadisticas
     t_estadisticas estadisticas;
 } t_pcb;
