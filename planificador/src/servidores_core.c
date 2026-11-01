@@ -208,6 +208,12 @@ static void atender_mensaje(int fd, uint8_t op_code, int identificador, t_buffer
         case SYSCALL_INIT_JOB:
             atender_init_job(fd, identificador, buffer);
             break;
+        case SYSCALL_ALLOC:
+            atender_alloc(fd, identificador, buffer);
+            break;
+        case SYSCALL_FREE:
+            atender_free(fd, identificador, buffer);
+            break;
         case DEVOLUCION_JOB:
             recibir_devolucion(identificador, buffer);
             break;
