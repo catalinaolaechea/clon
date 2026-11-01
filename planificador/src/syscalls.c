@@ -4,6 +4,7 @@
 #include "estados.h"
 #include "devolucion.h"
 #include "servicios.h"
+#include "cliente_placa.h"
 #include <utils/protocolo.h>
 #include <utils/contexto.h>
 #include <utils/direcciones.h>
@@ -96,4 +97,49 @@ void atender_syscall_servicio(int identificador_core, uint8_t op_code, t_buffer*
     // primero BLOCKED y despues encolar: si no, el servicio podria pasarlo a READY desde EXEC
     cambiar_estado(pcb, ESTADO_BLOCKED);
     encolar_en_servicio(servicio, pedido);
+}
+
+static void responder_syscall(int fd, int identificador_core, uint32_t jid, const char* syscall, t_paquete* respuesta) {
+    if (enviar_paquete(fd, respuesta) != CONEXION_OK) {
+        log_error(planificador_logger, "No se pudo responder %s del Job %u al Core %d", syscall, jid, identificador_core);
+    }
+    eliminar_paquete(respuesta);
+}
+
+void atender_alloc(int fd, int identificador_core, t_buffer* buffer) {
+    uint32_t jid = buffer_read_uint32(buffer);
+    uint32_t tamanio = buffer_read_uint32(buffer);
+
+    log_info(planificador_logger, LOG_SYSCALL, jid, "ALLOC");
+
+    // el que la pide esta en EXEC: solo lo toca el hilo de su Core, que es este
+    t_pcb* pcb = buscar_pcb_en_cola(ESTADO_EXEC, jid);
+    if (pcb == NULL) {
+        log_error(planificador_logger, "ALLOC del Job %u, que no esta en EXEC", jid);
+        responder_syscall(fd, identificador_core, jid, "ALLOC", crear_paquete(SYSCALL_ERROR));
+        return;
+    }
+
+    pcb->estadisticas.cantidad_syscalls++;
+
+    uint32_t dir_logica = 0;
+    t_paquete* respuesta;
+
+    switch (placa_alloc(jid, tamanio, &dir_logica)) {
+        case RESULTADO_ALLOC_OK:
+            pcb_registrar_alloc(pcb, dir_logica, tamanio);
+            respuesta = crear_paquete(RESPUESTA_ALLOC);
+            buffer_add_uint32(respuesta->buffer, dir_logica);
+            break;
+        case RESULTADO_ALLOC_SIN_ESPACIO:
+            // no se finaliza aca: el Core todavia lo esta ejecutando y lo devuelve por EXIT
+            log_error(planificador_logger, "No hay lugar en el Offload para %u bytes del Job %u: se finaliza", tamanio, jid);
+            pcb->motivo_finalizacion = FINALIZACION_SIN_MEMORIA;
+            respuesta = crear_paquete(SYSCALL_ERROR);
+            break;
+        default:
+            respuesta = crear_paquete(SYSCALL_ERROR);
+    }
+
+    responder_syscall(fd, identificador_core, jid, "ALLOC", respuesta);
 }
