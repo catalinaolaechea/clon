@@ -24,4 +24,13 @@ bool placa_leer_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* destino)
 // false si la Placa responde MEMORIA_ERROR.
 bool placa_escribir_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* origen);
 
+typedef enum {
+    RESULTADO_ALLOC_OK,
+    RESULTADO_ALLOC_SIN_ESPACIO,   // ALLOC_ERROR: no hay lugar en el Offload, el Job se finaliza
+    RESULTADO_ALLOC_ERROR          // no se pudo hablar con la Placa
+} t_resultado_alloc;
+
+// Pide a la Placa 'tamanio' bytes para el Job. Con RESULTADO_ALLOC_OK deja en 'dir_logica' donde empiezan.
+t_resultado_alloc placa_alloc(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica);
+
 #endif
