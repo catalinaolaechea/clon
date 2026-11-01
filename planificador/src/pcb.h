@@ -2,7 +2,9 @@
 #define PCB_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <commons/temporal.h>
+#include <commons/collections/list.h>
 #include <utils/contexto.h>
 
 #define LOG_CAMBIO_ESTADO "## (%u) Pasa del estado %s al estado %s"
@@ -40,6 +42,9 @@ typedef struct {
     t_temporal* rafaga_actual;
     //I/O
     uint8_t syscall_pendiente;
+    //Memoria
+    t_list* asignaciones; // las de ALLOC todavia sin FREE: { dir_logica, tamanio }
+    int motivo_finalizacion; // -1 si no hay; si no, el t_motivo_finalizacion que anoto una syscall (ej. ALLOC sin Offload)
     //Estadisticas
     t_estadisticas estadisticas;
 } t_pcb;
@@ -54,5 +59,11 @@ void pcb_actualizar_estadisticas(t_pcb* pcb, t_estado anterior, t_estado siguien
 // Para HRRN: pone en 0 la espera al entrar a READY y la rafaga al entrar a EXEC, y las frena al salir.
 // Al salir de EXEC recalcula la estimacion de la proxima rafaga con HRRN_ALFA.
 void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguiente);
+
+// Guarda la asignacion y suma 'tamanio' a la memoria actual del Job (y a la maxima si la supera).
+void pcb_registrar_alloc(t_pcb* pcb, uint32_t dir_logica, uint32_t tamanio);
+
+// Saca la asignacion que empieza en 'dir_logica' y resta su tamanio. false si no habia ninguna.
+bool pcb_registrar_free(t_pcb* pcb, uint32_t dir_logica);
 
 #endif

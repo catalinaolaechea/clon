@@ -306,3 +306,100 @@ bool placa_escribir_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* orig
     eliminar_buffer(buffer);
     return ok;
 }
+
+t_resultado_alloc placa_alloc(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica) {
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(ALLOC);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, tamanio);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar ALLOC de %u bytes del JID %u a la Placa", tamanio, jid);
+        return RESULTADO_ALLOC_ERROR;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio ALLOC del JID %u", jid);
+        return RESULTADO_ALLOC_ERROR;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio ALLOC del JID %u", jid);
+        return RESULTADO_ALLOC_ERROR;
+    }
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);  // la respuesta ya salio del socket
+
+    t_resultado_alloc resultado_alloc = RESULTADO_ALLOC_ERROR;
+
+    if (op_code == ALLOC_OK && buffer->size == sizeof(uint32_t)) {
+        *dir_logica = buffer_read_uint32(buffer);
+        resultado_alloc = RESULTADO_ALLOC_OK;
+    } else if (op_code == ALLOC_ERROR) {
+        resultado_alloc = RESULTADO_ALLOC_SIN_ESPACIO;
+    } else {
+        log_error(planificador_logger, "La Placa respondio %u a ALLOC del JID %u", op_code, jid);
+    }
+
+    eliminar_buffer(buffer);
+    return resultado_alloc;
+}
+
+bool placa_free(uint32_t jid, uint32_t dir_logica) {
+    pthread_mutex_lock(&conexiones_planificador.mutex_placa);
+
+    t_paquete* paquete = crear_paquete(FREE);
+    buffer_add_uint32(paquete->buffer, jid);
+    buffer_add_uint32(paquete->buffer, dir_logica);
+
+    int resultado = enviar_paquete(conexiones_planificador.fd_placa, paquete);
+    eliminar_paquete(paquete);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "No se pudo enviar FREE de la direccion %u del JID %u a la Placa", dir_logica, jid);
+        return false;
+    }
+
+    uint8_t op_code;
+    resultado = recibir_operacion(conexiones_planificador.fd_placa, &op_code);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio FREE del JID %u", jid);
+        return false;
+    }
+
+    t_buffer* buffer;
+    resultado = recibir_buffer(conexiones_planificador.fd_placa, &buffer);
+
+    if (resultado != CONEXION_OK) {
+        pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+        log_error(planificador_logger, "la Placa no respondio FREE del JID %u", jid);
+        return false;
+    }
+
+    eliminar_buffer(buffer);  // FREE_OK viene vacio, pero hay que sacarlo del socket
+
+    pthread_mutex_unlock(&conexiones_planificador.mutex_placa);
+
+    if (op_code != FREE_OK) {
+        log_error(planificador_logger, "La Placa respondio %u a FREE del JID %u", op_code, jid);
+        return false;
+    }
+
+    return true;
+}

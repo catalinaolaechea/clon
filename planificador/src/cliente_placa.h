@@ -7,6 +7,12 @@
 #define LOG_DESLOCKEO "## (%u) - Deslockeo de paginas"
 #define LOG_ACCESO_MEMORIA "## (%u) - %s - Dirección Física: %u - Tamaño: %u"
 
+typedef enum {
+    RESULTADO_ALLOC_OK,
+    RESULTADO_ALLOC_SIN_ESPACIO,   // ALLOC_ERROR: no hay lugar en el Offload, el Job se finaliza
+    RESULTADO_ALLOC_ERROR          // no se pudo hablar con la Placa
+} t_resultado_alloc;
+
 bool placa_crear_job(uint32_t jid, char* archivo_pseudocodigo);
 bool placa_finalizar_job(uint32_t jid);
 
@@ -23,5 +29,11 @@ bool placa_leer_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* destino)
 // Escribe en la Placa un pedazo de la memoria del Job (no cruza de marco) con los bytes de 'origen'.
 // false si la Placa responde MEMORIA_ERROR.
 bool placa_escribir_memoria(uint32_t jid, t_direccion_fisica* pedazo, void* origen);
+
+// Pide a la Placa 'tamanio' bytes para el Job. Con RESULTADO_ALLOC_OK deja en 'dir_logica' donde empiezan.
+t_resultado_alloc placa_alloc(uint32_t jid, uint32_t tamanio, uint32_t* dir_logica);
+
+// Pide a la Placa liberar la asignacion que empieza en 'dir_logica' y espera FREE_OK.
+bool placa_free(uint32_t jid, uint32_t dir_logica);
 
 #endif

@@ -36,6 +36,7 @@ static char* motivo_finalizacion_to_string(t_motivo_finalizacion motivo) {
         case FINALIZACION_ERROR_CREAR_JOB:    return "ERROR_CREAR_JOB";
         case FINALIZACION_ERROR_CARGA_PAGINA: return "ERROR_CARGA_PAGINA";
         case FINALIZACION_ERROR_SERVICIO:     return "ERROR_SERVICIO";
+        case FINALIZACION_SIN_MEMORIA:        return "SIN_MEMORIA";
         default:                              return "DESCONOCIDO";
     }
 }

@@ -45,6 +45,8 @@ t_pcb* pcb_crear(uint32_t jid, char* archivo_pseudocodigo) {
     inicializar_tiempos(&pcb->estadisticas);
     temporal_create_and_stop(&pcb->espera_en_ready);
     temporal_create_and_stop(&pcb->rafaga_actual);
+    pcb->asignaciones = list_create();
+    pcb->motivo_finalizacion = -1;
 
     return pcb;
 }
@@ -59,6 +61,7 @@ void pcb_destruir(t_pcb* pcb) {
     temporal_destroy(pcb->estadisticas.tiempo_total);
     temporal_destroy(pcb->estadisticas.tiempo_ready);
     temporal_destroy(pcb->estadisticas.tiempo_new);
+    list_destroy_and_destroy_elements(pcb->asignaciones, free);
     free(pcb);
 }
 
@@ -114,4 +117,36 @@ void pcb_actualizar_planificacion(t_pcb* pcb, t_estado anterior, t_estado siguie
     if (siguiente == ESTADO_EXEC) {
         reiniciar_cronometro(&pcb->rafaga_actual);
     }
+}
+
+typedef struct {
+    uint32_t dir_logica;
+    uint32_t tamanio;
+} t_asignacion;
+
+void pcb_registrar_alloc(t_pcb* pcb, uint32_t dir_logica, uint32_t tamanio) {
+    t_asignacion* asignacion = malloc(sizeof(t_asignacion));
+    asignacion->dir_logica = dir_logica;
+    asignacion->tamanio = tamanio;
+    list_add(pcb->asignaciones, asignacion);
+
+    t_estadisticas* estadisticas = &pcb->estadisticas;
+    estadisticas->memoria_actual += tamanio;
+    if (estadisticas->memoria_actual > estadisticas->memoria_maxima) {
+        estadisticas->memoria_maxima = estadisticas->memoria_actual;
+    }
+}
+
+bool pcb_registrar_free(t_pcb* pcb, uint32_t dir_logica) {
+    for (int i = 0; i < list_size(pcb->asignaciones); i++) {
+        t_asignacion* asignacion = list_get(pcb->asignaciones, i);
+        if (asignacion->dir_logica == dir_logica) {
+            list_remove(pcb->asignaciones, i);
+            pcb->estadisticas.memoria_actual -= asignacion->tamanio;
+            free(asignacion);
+            return true;
+        }
+    }
+
+    return false;
 }
