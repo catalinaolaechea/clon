@@ -54,7 +54,10 @@ typedef enum {
     SYSCALL_LOAD_BATCH  = 23,
     SYSCALL_LABEL       = 24,
     SYSCALL_REPORT      = 25,
-    SYSCALL_OK          = 30,  
+    SYSCALL_SAVE_CHECKPOINT   = 26,
+    SYSCALL_LOAD_CHECKPOINT   = 27,
+    SYSCALL_DELETE_CHECKPOINT = 28,
+    SYSCALL_OK          = 30,
     RESPUESTA_ALLOC     = 31,
     SYSCALL_ERROR       = 32,
 
@@ -89,7 +92,18 @@ typedef enum {
     CREAR_JOB_ERROR = 82,
     FINALIZAR_JOB_OK = 83,
     FREE_OK             = 84,
-    CARGAR_PAGINA_OK    = 85
+    CARGAR_PAGINA_OK    = 85,
+
+    // --- 100-129: Planificador <-> Storage (Check 4) ---
+    GUARDAR_CHECKPOINT  = 100,
+    GUARDAR_OK          = 101,
+    GUARDAR_ERROR       = 102,
+    CARGAR_CHECKPOINT   = 103,
+    CARGAR_OK           = 104,
+    CARGAR_ERROR        = 105,
+    ELIMINAR_CHECKPOINT = 106,
+    ELIMINAR_OK         = 107,
+    ELIMINAR_NO_EXISTE  = 108
 
 } t_op_code;
 
