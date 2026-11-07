@@ -205,7 +205,9 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 | `23` | `SYSCALL_LOAD_BATCH` | Core → Planif | ✔ `uint32 jid`, `contexto`, `string archivo`, `uint32 tamanio`, `lista_direcciones` |
 | `24` | `SYSCALL_LABEL` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint32 tamanio`, `lista_direcciones` |
 | `25` | `SYSCALL_REPORT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `uint32 tamanio`, `lista_direcciones` |
-| `26 – 28` | `SAVE_CHECKPOINT`, `LOAD_CHECKPOINT`, `DELETE_CHECKPOINT` | Core → Planif | reservados (Check 4) |
+| `26` | `SYSCALL_SAVE_CHECKPOINT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `string nombre`, `uint32 tamanio`, `lista_direcciones` |
+| `27` | `SYSCALL_LOAD_CHECKPOINT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `string nombre`, `uint32 tamanio`, `lista_direcciones` |
+| `28` | `SYSCALL_DELETE_CHECKPOINT` | Core → Planif | ✔ `uint32 jid`, `contexto`, `string nombre` |
 | `30` | `SYSCALL_OK` | Planif → Core | ✔ vacío (canal **dispatch**) |
 | `31` | `RESPUESTA_ALLOC` | Planif → Core | ✔ `uint32 dir_logica` |
 | `32` | `SYSCALL_ERROR` | Planif → Core | ✔ vacío: la syscall no se pudo hacer y el Job se finaliza |
@@ -214,12 +216,16 @@ el check correspondiente, salvo los que el enunciado ya fija (marcados con ✔).
 en su propio mensaje (`13`) porque necesita la página: agregarle un campo a `DEVOLUCION_JOB`
 cambiaría un mensaje que Core y Planificador ya usan.
 
-**Syscalls bloqueantes (`LOAD_BATCH`, `LABEL`, `REPORT`):** cada una es **un solo mensaje** que
+**Syscalls bloqueantes (`LOAD_BATCH`, `LABEL`, `REPORT` y las de checkpoints):** cada una es **un solo mensaje** que
 devuelve el Job y trae todo lo que el Planificador necesita: contexto, parámetros y las direcciones
 físicas ya traducidas. Así el pedido llega entero o no llega; con dos mensajes, una desconexión en el
 medio deja al Planificador con medio pedido. Las páginas siguen **lockeadas** hasta que el
 Planificador termina el servicio y pide el deslockeo. El PC del contexto ya apunta a la siguiente
 instrucción.
+
+**Checkpoints:** `SAVE` y `LOAD` tienen la misma forma que `LOAD_BATCH`, con `nombre` en lugar de
+`archivo`. `DELETE` no toca memoria, así que no lleva lista, pero igual devuelve el contexto porque
+bloquea al Job (pág. 11). `nombre` viaja tal cual: lo valida solo el Storage (ver Planificador ↔ Storage).
 
 **`ALLOC` sin lugar en el Offload:** el Planificador responde `SYSCALL_ERROR` y anota el motivo en la
 PCB. El Core deja de ejecutar y devuelve el Job con `DEVOLUCION_JOB` y `motivo = EXIT`, y el
@@ -312,9 +318,39 @@ relativo al `PATH_INSTRUCCIONES` de la Placa.
 
 | op_code | Nombre | Sentido |
 |---|---|---|
-| `100 – 102` | `SAVE_CHECKPOINT` y su respuesta | Planif ↔ Storage |
-| `103 – 105` | `LOAD_CHECKPOINT` y su respuesta | Planif ↔ Storage |
-| `106 – 107` | `DELETE_CHECKPOINT` y su respuesta | Planif ↔ Storage |
+| `100` | `GUARDAR_CHECKPOINT` | Planif → Storage (`string nombre`, `bloque contenido`) |
+| `101` | `GUARDAR_OK` | Storage → Planif (vacío) |
+| `102` | `GUARDAR_ERROR` | Storage → Planif (vacío: sin espacio, directorio lleno o nombre inválido; se finaliza el Job) |
+| `103` | `CARGAR_CHECKPOINT` | Planif → Storage (`string nombre`) |
+| `104` | `CARGAR_OK` | Storage → Planif (`bloque contenido`, el checkpoint **completo**) |
+| `105` | `CARGAR_ERROR` | Storage → Planif (vacío: no existe; se finaliza el Job) |
+| `106` | `ELIMINAR_CHECKPOINT` | Planif → Storage (`string nombre`) |
+| `107` | `ELIMINAR_OK` | Storage → Planif (vacío) |
+| `108` | `ELIMINAR_NO_EXISTE` | Storage → Planif (vacío: se informa, pero el Job **sigue**) |
+
+Todos son **pedido-respuesta**, igual que con la Placa.
+
+**Los errores viajan sin motivo.** El log obligatorio del error lo escribe el Storage, y al
+Planificador el motivo no le cambia nada: finaliza el Job igual. Si después hace falta, agregar un
+campo no rompe a nadie.
+
+**`LOAD` con un tamaño distinto al pedido.** El Storage responde siempre el checkpoint completo
+(pág. 28). Si es más largo que `tamanio`, el Planificador escribe los primeros `tamanio` bytes
+(pág. 11). Si es más corto, es error y se finaliza el Job, igual que el Loader con un lote corto:
+rellenar dejaría datos falsos en la memoria del Job.
+
+**El nombre lo valida solo el Storage.** El límite de 22 caracteres (23 bytes con el `'\0'`) es del
+formato de su directorio. Un nombre largo en `GUARDAR` da `GUARDAR_ERROR`; en `CARGAR` y `ELIMINAR`
+da "no existe", porque nunca pudo guardarse. Validarlo también en Core y Planificador sería código
+triplicado.
+
+**Un solo socket, pedidos de a uno.** El Planificador usa una conexión al Storage con su mutex,
+tomado hasta leer la respuesta, así que los checkpoints de distintos Jobs se serializan. Alcanza
+para las pruebas; una conexión por pedido daría concurrencia real a costa de un handshake por
+checkpoint. El Storage igual atiende un hilo por conexión (pág. 26).
+
+**`ELIMINAR_NO_EXISTE` es un op_code y no un flag**, igual que el resto de las respuestas: el que
+recibe decide por el op_code sin leer payload.
 
 ## 10. Estructuras grandes anticipadas
 
@@ -360,3 +396,4 @@ de mergear, porque del otro lado hay alguien leyendo esos campos en ese orden.
 | 2026-10-15 | **Mensajes del Check 3** (SIS-56): `13`, `21–25`, `31–32` (Planif ↔ Core); `45–48`, `51–53` (Core/Planif ↔ Placa); `72–76`, `84–85` (Planif ↔ Placa). **Cambia `DESLOCKEAR_PAGINAS` (49)**: ahora tiene respuesta (`51`) y lo usa también el Planificador. Se liberan `77–80` |
 | 2026-10-29 | **Nuevo `OBTENER_MARCO_ERROR` (54)** (SIS-59): respuesta de error a `OBTENER_MARCO`, con `uint32 motivo` (`t_marco_error`), igual que `FETCH_ERROR` |
 | 2026-10-29 | **Nuevo `MEMORIA_ERROR` (55)** (SIS-60): respuesta de error a `LEER_MEMORIA` / `ESCRIBIR_MEMORIA`, con `uint32 motivo` (`t_memoria_error`). Lo reciben el Core y el Planificador |
+| 2026-11-07 | **Mensajes del Check 4** (SIS-83): `26–28` (Core → Planif) y `100–108` (Planif ↔ Storage). Se usa `108`, que estaba libre en el rango |
